@@ -30,6 +30,7 @@ enum SeamlessMessage: UInt16 {
     case dragOut = 0x1C
     case setClipboard = 0x1D
     case preedit = 0x1E
+    case folderChanged = 0x20
 }
 
 enum SeamlessPorts {

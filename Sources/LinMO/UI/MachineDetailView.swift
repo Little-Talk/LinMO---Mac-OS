@@ -92,6 +92,7 @@ struct MachineDetailView: View {
             if machine.state == .running {
                 SeamlessToggle(session: machine.seamless)
                 FullScreenButton(session: machine.seamless)
+                WineInstallButton(rosettaEnabled: machine.config.rosettaEnabled)
 
                 Button {
                     machine.requestShutdown()
@@ -112,7 +113,7 @@ struct MachineDetailView: View {
     @ViewBuilder
     private var display: some View {
         if let vm = machine.virtualMachine {
-            RunningDisplay(vm: vm, seamless: machine.seamless)
+            RunningDisplay(controller: machine, vm: vm, seamless: machine.seamless)
                 .overlay(alignment: .bottom) {
                     if let status = machine.setupStatus {
                         SetupProgressBanner(status: status) {
@@ -190,7 +191,7 @@ struct MachineSettingsSheet: View {
                 if RosettaSupport.availability != .notSupported {
                     Toggle("รันโปรแกรม x86_64 ผ่าน Rosetta", isOn: $rosetta)
                     if rosetta && !machine.config.rosettaEnabled {
-                        Text("เปิดใช้หลังสร้างเครื่อง ต้องตั้งค่าใน Linux เองหนึ่งครั้ง ดูวิธีใน README")
+                        Text("มีผลเมื่อเปิดเครื่องครั้งถัดไป จากนั้นรันคำสั่งติดตั้ง LinMO Tools ใน Linux อีกครั้งหนึ่งครั้ง")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

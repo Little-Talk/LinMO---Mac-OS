@@ -20,6 +20,7 @@ struct MachineBundle {
     var diskURL: URL { url.appendingPathComponent("Disk.img") }
     var nvramURL: URL { url.appendingPathComponent("NVRAM") }
     var machineIdentifierURL: URL { url.appendingPathComponent("MachineIdentifier") }
+    var macAddressURL: URL { url.appendingPathComponent("MACAddress") }
     var configURL: URL { url.appendingPathComponent("config.json") }
     var cloudInitSeedURL: URL { url.appendingPathComponent("CloudInit.iso") }
     var snapshotsURL: URL { url.appendingPathComponent("Snapshots", isDirectory: true) }
@@ -56,12 +57,23 @@ struct MachineBundle {
 
             _ = try VZEFIVariableStore(creatingVariableStoreAt: bundle.nvramURL)
             try VZGenericMachineIdentifier().dataRepresentation.write(to: bundle.machineIdentifierURL)
+            try VZMACAddress.randomLocallyAdministered().string.write(to: bundle.macAddressURL, atomically: true, encoding: .utf8)
             try bundle.save(config)
         } catch {
             try? fm.removeItem(at: bundle.url)
             throw error
         }
         return bundle
+    }
+
+    func macAddress() -> VZMACAddress {
+        if let text = try? String(contentsOf: macAddressURL, encoding: .utf8),
+           let saved = VZMACAddress(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return saved
+        }
+        let fresh = VZMACAddress.randomLocallyAdministered()
+        try? fresh.string.write(to: macAddressURL, atomically: true, encoding: .utf8)
+        return fresh
     }
 
     func growDisk(toGB gb: Int) throws {

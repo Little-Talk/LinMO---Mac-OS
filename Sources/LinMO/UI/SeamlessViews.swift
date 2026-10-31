@@ -52,7 +52,7 @@ struct AgentInstallHelp: View {
             Text(isUpdate ? "อัปเดต LinMO Agent" : "ยังไม่พบ LinMO Agent")
                 .font(.headline)
             Text(isUpdate
-                 ? "agent ใน Linux เป็นรุ่นเก่า รุ่นใหม่ทำให้หน้าต่างลื่นขึ้น คมชัดบน Retina พิมพ์ไทยด้วยแป้นพิมพ์ Mac และลากไฟล์มาวางได้ เปิด Terminal ใน Linux แล้ววางคำสั่งนี้:"
+                 ? "agent ใน Linux เป็นรุ่นเก่า รุ่นใหม่ทำให้หน้าต่างลื่นขึ้น คมชัดบน Retina พิมพ์ไทยด้วยแป้นพิมพ์ Mac ลากไฟล์มาวางได้ และไฟล์ในโฟลเดอร์แชร์อัปเดตเองทันที เปิด Terminal ใน Linux แล้ววางคำสั่งนี้:"
                  : "โหมดหน้าต่างแยกต้องใช้ LinMO Agent ใน Linux เครื่องที่สร้างด้วยตัวช่วยติดตั้งตั้งแต่ v0.4 จะมีให้แล้ว ถ้ายังไม่มี ให้เปิด Terminal ใน Linux แล้ววางคำสั่งนี้:")
                 .fixedSize(horizontal: false, vertical: true)
             Text(GuestTools.installCommand)
@@ -79,6 +79,72 @@ struct AgentInstallHelp: View {
     }
 }
 
+struct WineInstallButton: View {
+    let rosettaEnabled: Bool
+    @State private var showing = false
+    @State private var copied = false
+    @State private var hangover = true
+
+    private var command: String { GuestTools.wineInstallCommand(hangover: hangover) }
+
+    var body: some View {
+        Button {
+            copied = false
+            showing = true
+        } label: {
+            Label("Wine", systemImage: "wineglass")
+        }
+        .help("ติดตั้ง Wine เพื่อเปิดโปรแกรม Windows ใน Linux")
+        .popover(isPresented: $showing, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("ติดตั้ง Wine")
+                    .font(.headline)
+                Picker("", selection: $hangover) {
+                    Text("Hangover").tag(true)
+                    Text("WineHQ + Rosetta").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .onChange(of: hangover) { copied = false }
+                Text(hangover
+                     ? "เปิดโปรแกรม Windows ได้ทั้ง 32 และ 64 บิต ไม่ต้องใช้ Rosetta แนะนำสำหรับโปรแกรมส่วนใหญ่"
+                     : "เร็วกว่า แต่เปิดได้เฉพาะโปรแกรม Windows 64 บิต ต้องเปิด Rosetta ในตั้งค่าเครื่อง")
+                    .fixedSize(horizontal: false, vertical: true)
+                if !hangover && !rosettaEnabled {
+                    Text("ยังไม่ได้เปิด Rosetta ให้ปิดเครื่อง เปิด \"รันโปรแกรม x86_64 ผ่าน Rosetta\" ในตั้งค่าเครื่อง แล้วเปิดเครื่องและกดปุ่มนี้อีกครั้ง")
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("รองรับ Debian และ Ubuntu เปิด Terminal ใน Linux แล้ววางคำสั่งนี้ ติดตั้งได้ทีละแบบ ถ้าลงอีกแบบไว้แล้วจะถูกถอดออกให้")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(command)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                    HStack {
+                        Button(copied ? "คัดลอกแล้ว" : "คัดลอกคำสั่ง") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(command, forType: .string)
+                            copied = true
+                        }
+                        Spacer()
+                    }
+                    Text("ติดตั้งเสร็จแล้วดับเบิลคลิกไฟล์ .exe หรือพิมพ์ wine ชื่อไฟล์.exe ใน Terminal")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(16)
+            .frame(width: 440)
+        }
+    }
+}
+
 struct FullScreenButton: View {
     @ObservedObject var session: SeamlessSession
 
@@ -95,6 +161,7 @@ struct FullScreenButton: View {
 }
 
 struct RunningDisplay: View {
+    let controller: MachineController
     let vm: VZVirtualMachine
     @ObservedObject var seamless: SeamlessSession
 
@@ -102,7 +169,7 @@ struct RunningDisplay: View {
         if seamless.isEnabled {
             SeamlessLauncherView(session: seamless)
         } else {
-            VMDisplayView(machine: vm)
+            VMDisplayView(controller: controller, machine: vm)
         }
     }
 }
@@ -122,11 +189,20 @@ struct SeamlessLauncherView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("โหมดหน้าต่างแยก")
-                    .font(.title2.bold())
-                Text("แอพ Linux จะเปิดเป็นหน้าต่างของตัวเองบน Mac เลือกแอพด้านล่างเพื่อเปิด หรือกดปุ่ม \"หน้าต่างแยก\" อีกครั้งเพื่อกลับไปดูหน้าจอ Linux ทั้งจอ")
+                HStack(alignment: .firstTextBaseline) {
+                    Text("โหมดหน้าต่างแยก")
+                        .font(.title2.bold())
+                    Spacer()
+                    Button {
+                        session.setEnabled(false)
+                    } label: {
+                        Label("กลับไปหน้าจอ Linux", systemImage: "chevron.backward")
+                    }
+                    .help("ปิดโหมดหน้าต่างแยก แล้วกลับไปดูหน้าจอ Linux ทั้งจอ")
+                }
+                Text("แอพ Linux จะเปิดเป็นหน้าต่างของตัวเองบน Mac เลือกแอพด้านล่างเพื่อเปิด หรือกดปุ่ม \"กลับไปหน้าจอ Linux\" เพื่อกลับไปดูหน้าจอ Linux ทั้งจอ")
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(3)
                 TextField("ค้นหาแอพ", text: $search)
                     .textFieldStyle(.roundedBorder)
                     .padding(.top, 6)
@@ -163,8 +239,10 @@ struct SeamlessLauncherView: View {
                     .buttonStyle(.plain)
                     .padding(.vertical, 3)
                 }
+                .frame(maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private func icon(for app: SeamlessSession.App) -> String {

@@ -85,6 +85,46 @@ X-GNOME-Autostart-enabled=true
 DESKTOP
 fi
 
+echo "▶ ตั้งค่า Rosetta สำหรับโปรแกรม x86_64…"
+install -d /usr/local/sbin
+cat > /usr/local/sbin/linmo-rosetta <<'ROSETTA'
+#!/bin/sh
+mkdir -p /media/rosetta
+if ! mountpoint -q /media/rosetta; then
+    mount -t virtiofs -o ro rosetta /media/rosetta 2>/dev/null || exit 0
+fi
+[ -x /media/rosetta/rosetta ] || exit 0
+if ! mountpoint -q /proc/sys/fs/binfmt_misc; then
+    mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc 2>/dev/null || true
+fi
+[ -e /proc/sys/fs/binfmt_misc/rosetta ] && exit 0
+printf '%s\n' ':rosetta:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/media/rosetta/rosetta:CF' > /proc/sys/fs/binfmt_misc/register
+ROSETTA
+chmod 0755 /usr/local/sbin/linmo-rosetta
+if command -v systemctl >/dev/null 2>&1; then
+    cat > /etc/systemd/system/linmo-rosetta.service <<'UNIT'
+[Unit]
+Description=LinMO: register Rosetta for x86_64 programs
+After=local-fs.target proc-sys-fs-binfmt_misc.mount systemd-binfmt.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/linmo-rosetta
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    systemctl daemon-reload || true
+    systemctl enable linmo-rosetta.service >/dev/null 2>&1 || true
+fi
+/usr/local/sbin/linmo-rosetta || true
+if [ -e /proc/sys/fs/binfmt_misc/rosetta ]; then
+    echo "  เปิดใช้ Rosetta แล้ว"
+else
+    echo "  ยังไม่พบ Rosetta — เปิด Rosetta ในการตั้งค่าเครื่องบน Mac แล้วรีสตาร์ทเครื่อง จากนั้นรันคำสั่งติดตั้งนี้อีกครั้ง"
+fi
+
 echo "✅ ติดตั้งเสร็จแล้ว — ออกจากระบบแล้วเข้าใหม่ (หรือรีสตาร์ทเครื่อง) เพื่อเริ่มใช้งาน"
 if [ "${XDG_SESSION_TYPE:-}" = "wayland" ] && [ "$WAYLAND_OK" != 1 ]; then
     echo "⚠️  ตอนนี้ใช้ Wayland อยู่ — ถ้าไม่มี linmo-wayland โหมดหน้าต่างแยกต้องใช้เซสชัน X11 (Xorg)"

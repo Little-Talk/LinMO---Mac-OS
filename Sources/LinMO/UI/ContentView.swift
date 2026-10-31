@@ -30,6 +30,7 @@ struct ContentView: View {
             if let machine = library.machines.first(where: { $0.id == selection }) {
                 MachineDetailView(machine: machine)
                     .id(machine.id)
+                    .navigationSplitViewColumnWidth(min: 560, ideal: 760)
             } else {
                 EmptyLibraryView(hasMachines: !library.machines.isEmpty) {
                     showingNewMachine = true

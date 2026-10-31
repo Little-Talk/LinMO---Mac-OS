@@ -5,9 +5,18 @@ enum GuestTools {
         MachineBundle.appSupportDirectory.appendingPathComponent("LinMOTools-\(GuestFiles.version).iso")
     }
 
-    static let installCommand = """
-    sudo sh -c 'mkdir -p /mnt/linmo-tools; for d in /dev/vd? /dev/sr?; do mount -o ro "$d" /mnt/linmo-tools 2>/dev/null || continue; [ -e /mnt/linmo-tools/install.sh ] && break; umount /mnt/linmo-tools; done; sh /mnt/linmo-tools/install.sh; umount /mnt/linmo-tools'
-    """
+    static let installCommand = command(running: "install.sh")
+
+    static func wineInstallCommand(hangover: Bool) -> String {
+        command(running: "install-wine.sh", arguments: hangover ? "hangover" : "winehq")
+    }
+
+    private static func command(running script: String, arguments: String = "") -> String {
+        let call = arguments.isEmpty ? script : "\(script) \(arguments)"
+        return """
+        sudo sh -c 'mkdir -p /mnt/linmo-tools; for d in /dev/vd? /dev/sr?; do mount -o ro "$d" /mnt/linmo-tools 2>/dev/null || continue; [ -e /mnt/linmo-tools/\(script) ] && break; umount /mnt/linmo-tools; done; sh /mnt/linmo-tools/\(call); umount /mnt/linmo-tools'
+        """
+    }
 
     @discardableResult
     static func ensureISO() throws -> URL {
@@ -28,6 +37,7 @@ enum GuestTools {
 
         try GuestFiles.agent.write(to: staging.appendingPathComponent("linmo-agent.py"))
         try GuestFiles.install.write(to: staging.appendingPathComponent("install.sh"))
+        try GuestFiles.installWine.write(to: staging.appendingPathComponent("install-wine.sh"))
 
         if let binary = Bundle.main.url(forResource: "linmo-wayland-aarch64", withExtension: nil) {
             try fm.copyItem(at: binary, to: staging.appendingPathComponent("linmo-wayland-aarch64"))
@@ -43,6 +53,10 @@ enum GuestTools {
 
         ติดตั้ง agent สำหรับโหมดหน้าต่างแยก:
             sudo sh /mnt/linmo-tools/install.sh
+
+        ติดตั้ง Wine สำหรับโปรแกรม Windows:
+            sudo sh /mnt/linmo-tools/install-wine.sh hangover
+            sudo sh /mnt/linmo-tools/install-wine.sh winehq
 
         """.write(to: staging.appendingPathComponent("README.txt"), atomically: true, encoding: .utf8)
 

@@ -51,7 +51,7 @@ final class SeamlessSession: ObservableObject {
         var isWayland: Bool { port == SeamlessPorts.wayland }
     }
 
-    static let currentAgentVersion = 5
+    static let currentAgentVersion = 6
 
     @Published private(set) var isConnected = false
     @Published private(set) var hasX11Agent = false
@@ -218,6 +218,11 @@ final class SeamlessSession: ObservableObject {
         for link in links.values {
             link.connection.send(.stream, ["enabled": enabled])
         }
+    }
+
+    func notifyFolderChanges(_ paths: [String]) {
+        guard let link = links[SeamlessPorts.agent], link.features.contains("folders") else { return }
+        link.connection.send(.folderChanged, ["paths": paths])
     }
 
     func launch(_ app: App) {

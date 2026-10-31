@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Virtualization
 
@@ -18,9 +19,11 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     @Published var errorMessage: String?
 
     private var setupListener: SetupProgressListener?
+    private var displayView: VZVirtualMachineView?
     let seamless: SeamlessSession
     private var restartAfterSetup = false
     private let fileAccess = SecurityScopedAccess()
+    private var folderWatcher: SharedFolderWatcher?
 
     init(bundle: MachineBundle, config: MachineConfig) {
         self.bundle = bundle
@@ -91,6 +94,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             seamless.prefersMacTextInput = config.macTextInput
             seamless.prefersWayland = config.preferWayland
             seamless.attach(to: machine)
+            startFolderWatcher()
 
             machine.start { [weak self] result in
                 Task { @MainActor in
@@ -126,6 +130,15 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             if resolved.url.path != config.installerISOPath || resolved.isStale {
                 let fresh = resolved.isStale ? SecurityScopedBookmark.make(for: resolved.url) ?? data : data
                 update { $0.installerISOPath = resolved.url.path; $0.installerISOBookmark = fresh }
+            }
+        }
+    }
+
+    private func startFolderWatcher() {
+        folderWatcher?.stop()
+        folderWatcher = config.sharedFolderPath.flatMap { path in
+            SharedFolderWatcher(path: path) { [weak self] paths in
+                Task { @MainActor in self?.seamless.notifyFolderChanges(paths) }
             }
         }
     }
@@ -174,7 +187,21 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         }
     }
 
+    func display(for vm: VZVirtualMachine) -> VZVirtualMachineView {
+        if let view = displayView, view.virtualMachine === vm {
+            return view
+        }
+        let view = VZVirtualMachineView()
+        view.virtualMachine = vm
+        view.capturesSystemKeys = true
+        view.automaticallyReconfiguresDisplay = true
+        displayView = view
+        return view
+    }
+
     fileprivate func didStop() {
+        folderWatcher?.stop()
+        folderWatcher = nil
         fileAccess.endAll()
         seamless.detach(from: virtualMachine)
         setupListener?.detach(from: virtualMachine)
@@ -183,6 +210,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             setupStatus = nil
         }
         virtualMachine = nil
+        displayView = nil
         state = .stopped
 
         if restartAfterSetup {
