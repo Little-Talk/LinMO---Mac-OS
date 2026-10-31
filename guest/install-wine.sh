@@ -154,17 +154,42 @@ Signed-By: /etc/apt/keyrings/winehq-archive.key
 EOF
 
 echo "▶ ติดตั้ง WineHQ (amd64 ผ่าน Rosetta)…"
+[ -L "/usr/local/bin/*" ] && rm -f "/usr/local/bin/*"
 apt-get update -qq
-apt-get install -y wine-stable-amd64:amd64
-for path in /opt/wine-stable/bin/*; do
-    tool="$(basename "$path")"
-    if ! command -v "$tool" >/dev/null 2>&1; then
-        ln -sf "$path" "/usr/local/bin/$tool"
-    fi
-done
-if ! command -v wine >/dev/null 2>&1 && [ -x /opt/wine-stable/bin/wine64 ]; then
-    ln -sf /opt/wine-stable/bin/wine64 /usr/local/bin/wine
+WINE_VERSION="$(apt-cache policy wine-stable:amd64 | awk '/Candidate:/ {print $2}')"
+if [ -z "$WINE_VERSION" ] || [ "$WINE_VERSION" = "(none)" ]; then
+    echo "❌ ไม่พบแพ็กเกจ wine-stable ในคลัง WineHQ" >&2
+    exit 1
 fi
+if [ "$(dpkg-query -W -f='${Version} ${Architecture}' wine-stable-i386 2>/dev/null || true)" != "$WINE_VERSION amd64" ]; then
+    WORK="$(mktemp -d)"
+    chmod 0755 "$WORK"
+    dpkg --add-architecture i386
+    apt-get update -qq || true
+    (cd "$WORK" && apt-get download -qq "wine-stable-i386:i386=$WINE_VERSION") || true
+    dpkg --remove-architecture i386
+    apt-get update -qq || true
+    mkdir -p "$WORK/pkg/DEBIAN"
+    DEB="$(ls "$WORK"/wine-stable-i386_*.deb 2>/dev/null | head -n 1)"
+    if [ -n "$DEB" ]; then
+        dpkg-deb -x "$DEB" "$WORK/full"
+        if [ -d "$WORK/full/opt/wine-stable/lib/wine/i386-windows" ]; then
+            mkdir -p "$WORK/pkg/opt/wine-stable/lib/wine"
+            cp -a "$WORK/full/opt/wine-stable/lib/wine/i386-windows" "$WORK/pkg/opt/wine-stable/lib/wine/"
+        fi
+    fi
+    cat > "$WORK/pkg/DEBIAN/control" <<CONTROL
+Package: wine-stable-i386
+Version: $WINE_VERSION
+Architecture: amd64
+Maintainer: LinMO <linmo@localhost>
+Description: LinMO stand-in for wine-stable-i386 under Rosetta
+CONTROL
+    dpkg-deb --build --root-owner-group "$WORK/pkg" "$WORK/shim.deb" >/dev/null
+    dpkg -i "$WORK/shim.deb"
+    rm -rf "$WORK"
+fi
+apt-get install -y --install-recommends winehq-stable:amd64
 WINE="$(command -v wine || true)"
 if [ -z "$WINE" ]; then
     echo "❌ ติดตั้ง Wine แล้วแต่ไม่พบคำสั่ง wine" >&2
