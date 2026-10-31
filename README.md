@@ -2,7 +2,7 @@
 
 ใช้ Linux บน Mac แบบง่ายที่สุด และเปิดแอพ Linux เป็นหน้าต่างแยกบน Mac เหมือนแอพปกติ
 
-> สถานะ: **v0.9 (เวอร์ชันทดลอง)** — แอพ Linux อยู่ใน Launchpad, Spotlight และเมนู "แอพ Linux" บนแถบเมนู,
+> สถานะ: **v0.10 (เวอร์ชันทดลอง)** — แอพ Linux อยู่ใน Launchpad, Spotlight และเมนู "แอพ Linux" บนแถบเมนู,
 > ชุดสำเร็จรูป (สายเรียน Linux / สาย dev / สาย security lab / สาย data science / สายออกแบบ), copy-paste รูปภาพ และเตรียมพร้อมส่งขึ้น Mac App Store
 > แผนพัฒนาต่อดู [docs/ROADMAP.md](docs/ROADMAP.md)
 
