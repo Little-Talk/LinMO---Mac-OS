@@ -83,6 +83,9 @@ struct WineInstallButton: View {
     let rosettaEnabled: Bool
     @State private var showing = false
     @State private var copied = false
+    @State private var hangover = true
+
+    private var command: String { GuestTools.wineInstallCommand(hangover: hangover) }
 
     var body: some View {
         Button {
@@ -91,15 +94,32 @@ struct WineInstallButton: View {
         } label: {
             Label("Wine", systemImage: "wineglass")
         }
-        .help("ติดตั้ง WineHQ เพื่อเปิดโปรแกรม Windows ใน Linux")
+        .help("ติดตั้ง Wine เพื่อเปิดโปรแกรม Windows ใน Linux")
         .popover(isPresented: $showing, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("ติดตั้ง WineHQ")
+                Text("ติดตั้ง Wine")
                     .font(.headline)
-                if rosettaEnabled {
-                    Text("Wine จะรันผ่าน Rosetta และเปิดโปรแกรม Windows ได้ทั้ง 32 และ 64 บิต รองรับ Debian และ Ubuntu เปิด Terminal ใน Linux แล้ววางคำสั่งนี้:")
+                Picker("", selection: $hangover) {
+                    Text("Hangover").tag(true)
+                    Text("WineHQ + Rosetta").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .onChange(of: hangover) { copied = false }
+                Text(hangover
+                     ? "เปิดโปรแกรม Windows ได้ทั้ง 32 และ 64 บิต ไม่ต้องใช้ Rosetta แนะนำสำหรับโปรแกรมส่วนใหญ่"
+                     : "เร็วกว่า แต่เปิดได้เฉพาะโปรแกรม Windows 64 บิต ต้องเปิด Rosetta ในตั้งค่าเครื่อง")
+                    .fixedSize(horizontal: false, vertical: true)
+                if !hangover && !rosettaEnabled {
+                    Text("ยังไม่ได้เปิด Rosetta ให้ปิดเครื่อง เปิด \"รันโปรแกรม x86_64 ผ่าน Rosetta\" ในตั้งค่าเครื่อง แล้วเปิดเครื่องและกดปุ่มนี้อีกครั้ง")
+                        .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(GuestTools.wineInstallCommand)
+                } else {
+                    Text("รองรับ Debian และ Ubuntu เปิด Terminal ใน Linux แล้ววางคำสั่งนี้ ติดตั้งได้ทีละแบบ ถ้าลงอีกแบบไว้แล้วจะถูกถอดออกให้")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(command)
                         .font(.system(.caption, design: .monospaced))
                         .textSelection(.enabled)
                         .padding(8)
@@ -108,7 +128,7 @@ struct WineInstallButton: View {
                     HStack {
                         Button(copied ? "คัดลอกแล้ว" : "คัดลอกคำสั่ง") {
                             NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(GuestTools.wineInstallCommand, forType: .string)
+                            NSPasteboard.general.setString(command, forType: .string)
                             copied = true
                         }
                         Spacer()
@@ -116,9 +136,6 @@ struct WineInstallButton: View {
                     Text("ติดตั้งเสร็จแล้วดับเบิลคลิกไฟล์ .exe หรือพิมพ์ wine ชื่อไฟล์.exe ใน Terminal")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text("Wine ต้องใช้ Rosetta ให้ปิดเครื่อง เปิด \"รันโปรแกรม x86_64 ผ่าน Rosetta\" ในตั้งค่าเครื่อง แล้วเปิดเครื่องและกดปุ่มนี้อีกครั้ง")
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

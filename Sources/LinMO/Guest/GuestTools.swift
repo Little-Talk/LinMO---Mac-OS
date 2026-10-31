@@ -6,11 +6,15 @@ enum GuestTools {
     }
 
     static let installCommand = command(running: "install.sh")
-    static let wineInstallCommand = command(running: "install-wine.sh")
 
-    private static func command(running script: String) -> String {
-        """
-        sudo sh -c 'mkdir -p /mnt/linmo-tools; for d in /dev/vd? /dev/sr?; do mount -o ro "$d" /mnt/linmo-tools 2>/dev/null || continue; [ -e /mnt/linmo-tools/\(script) ] && break; umount /mnt/linmo-tools; done; sh /mnt/linmo-tools/\(script); umount /mnt/linmo-tools'
+    static func wineInstallCommand(hangover: Bool) -> String {
+        command(running: "install-wine.sh", arguments: hangover ? "hangover" : "winehq")
+    }
+
+    private static func command(running script: String, arguments: String = "") -> String {
+        let call = arguments.isEmpty ? script : "\(script) \(arguments)"
+        return """
+        sudo sh -c 'mkdir -p /mnt/linmo-tools; for d in /dev/vd? /dev/sr?; do mount -o ro "$d" /mnt/linmo-tools 2>/dev/null || continue; [ -e /mnt/linmo-tools/\(script) ] && break; umount /mnt/linmo-tools; done; sh /mnt/linmo-tools/\(call); umount /mnt/linmo-tools'
         """
     }
 
@@ -50,8 +54,9 @@ enum GuestTools {
         ติดตั้ง agent สำหรับโหมดหน้าต่างแยก:
             sudo sh /mnt/linmo-tools/install.sh
 
-        ติดตั้ง WineHQ สำหรับโปรแกรม Windows:
-            sudo sh /mnt/linmo-tools/install-wine.sh
+        ติดตั้ง Wine สำหรับโปรแกรม Windows:
+            sudo sh /mnt/linmo-tools/install-wine.sh hangover
+            sudo sh /mnt/linmo-tools/install-wine.sh winehq
 
         """.write(to: staging.appendingPathComponent("README.txt"), atomically: true, encoding: .utf8)
 

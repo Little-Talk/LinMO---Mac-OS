@@ -31,16 +31,30 @@ if [ -z "$BASE" ] || [ -z "$CODENAME" ]; then
     exit 1
 fi
 
-echo "▶ ตรวจ Rosetta…"
-if [ ! -x /usr/local/sbin/linmo-rosetta ] && [ -f "$DIR/install.sh" ]; then
-    sh "$DIR/install.sh"
-fi
-[ -x /usr/local/sbin/linmo-rosetta ] && /usr/local/sbin/linmo-rosetta || true
-if [ ! -e /proc/sys/fs/binfmt_misc/rosetta ]; then
-    echo "❌ ยังไม่พบ Rosetta — บน Mac ให้ปิดเครื่อง เปิด \"รันโปรแกรม x86_64 ผ่าน Rosetta\" ในการตั้งค่าเครื่อง แล้วเปิดเครื่องและรันคำสั่งนี้อีกครั้ง" >&2
+MODE="${1:-hangover}"
+case "$MODE" in
+    hangover|winehq) ;;
+    *)
+        echo "ใช้: sudo sh $0 [hangover|winehq]" >&2
+        exit 1
+        ;;
+esac
+
+if [ "$MODE" = winehq ]; then
+    echo "▶ ตรวจ Rosetta…"
+    if [ ! -x /usr/local/sbin/linmo-rosetta ] && [ -f "$DIR/install.sh" ]; then
+        sh "$DIR/install.sh"
+    fi
+    [ -x /usr/local/sbin/linmo-rosetta ] && /usr/local/sbin/linmo-rosetta || true
+    if [ ! -e /proc/sys/fs/binfmt_misc/rosetta ]; then
+        echo "❌ ยังไม่พบ Rosetta — บน Mac ให้ปิดเครื่อง เปิด \"รันโปรแกรม x86_64 ผ่าน Rosetta\" ในการตั้งค่าเครื่อง แล้วเปิดเครื่องและรันคำสั่งนี้อีกครั้ง" >&2
+        exit 1
+    fi
+    echo "  Rosetta พร้อมใช้"
+elif [ "$(dpkg --print-architecture)" != arm64 ]; then
+    echo "❌ Hangover รองรับเฉพาะเครื่อง ARM64" >&2
     exit 1
 fi
-echo "  Rosetta พร้อมใช้"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -52,6 +66,17 @@ if [ -n "$I386" ]; then
 fi
 if dpkg --print-foreign-architectures | grep -qx i386; then
     dpkg --remove-architecture i386 || true
+fi
+
+installed_packages() {
+    dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' "$@" 2>/dev/null | awk '$1 == "ii" {print $2}' || true
+}
+
+if [ "$MODE" = winehq ]; then
+HANGOVER_PKGS="$(installed_packages 'hangover*')"
+if [ -n "$HANGOVER_PKGS" ]; then
+    echo "▶ ถอด Hangover ออก…"
+    apt-get purge -y -qq $HANGOVER_PKGS || true
 fi
 
 echo "▶ เพิ่มสถาปัตยกรรม amd64…"
@@ -196,6 +221,66 @@ CONTROL
     rm -rf "$WORK"
 fi
 apt-get install -y --install-recommends winehq-stable:amd64
+else
+WINEHQ_PKGS="$(installed_packages 'winehq-*' 'wine-stable*' 'wine-devel*' 'wine-staging*')"
+if [ -n "$WINEHQ_PKGS" ]; then
+    echo "▶ ถอด WineHQ ออก…"
+    apt-get purge -y -qq $WINEHQ_PKGS || true
+fi
+
+echo "▶ หา Hangover สำหรับ $BASE $CODENAME…"
+apt-get update -qq || true
+apt-get install -y -qq ca-certificates wget >/dev/null
+URL="$(python3 - "$BASE" "$CODENAME" "${VERSION_ID:-}" <<'PY'
+import json
+import re
+import sys
+import urllib.request
+
+base, codename, version = sys.argv[1], sys.argv[2].lower(), sys.argv[3]
+tag = base + re.sub(r"\D", "", version)
+req = urllib.request.Request(
+    "https://api.github.com/repos/AndreRH/hangover/releases?per_page=10",
+    headers={"Accept": "application/vnd.github+json", "User-Agent": "LinMO"},
+)
+try:
+    releases = json.load(urllib.request.urlopen(req, timeout=30))
+except Exception:
+    sys.exit(0)
+for release in releases:
+    if release.get("prerelease") or release.get("draft"):
+        continue
+    assets = [
+        a for a in release.get("assets", [])
+        if "arm64" in a["name"].lower() and re.search(r"\.(tar|tar\.\w+|tgz)$", a["name"].lower())
+    ]
+    for key in (codename, tag if re.search(r"\d", tag) else None):
+        if not key:
+            continue
+        for a in assets:
+            if key in a["name"].lower():
+                print(a["browser_download_url"])
+                sys.exit(0)
+PY
+)"
+if [ -z "$URL" ]; then
+    echo "❌ ไม่พบ Hangover สำหรับ $BASE $CODENAME — ลองใช้แบบ WineHQ + Rosetta แทน" >&2
+    exit 1
+fi
+echo "▶ ติดตั้ง Hangover ($(basename "$URL"))…"
+WORK="$(mktemp -d)"
+chmod 0755 "$WORK"
+wget -q -O "$WORK/hangover.tar" "$URL"
+tar -xf "$WORK/hangover.tar" -C "$WORK"
+DEBS="$(find "$WORK" -name '*.deb' | sort)"
+if [ -z "$DEBS" ]; then
+    echo "❌ ไฟล์ Hangover ที่ดาวน์โหลดมาไม่มีแพ็กเกจ .deb" >&2
+    rm -rf "$WORK"
+    exit 1
+fi
+apt-get install -y $DEBS || apt-get install -y $(echo "$DEBS" | grep -v wowbox64)
+rm -rf "$WORK"
+fi
 WINE="$(command -v wine || true)"
 if [ -z "$WINE" ]; then
     echo "❌ ติดตั้ง Wine แล้วแต่ไม่พบคำสั่ง wine" >&2
@@ -260,6 +345,11 @@ if home and user:
     if not existed:
         os.chown(os.path.dirname(path), pw.pw_uid, pw.pw_gid)
 PY
+
+if [ -n "$USER_HOME" ] && [ -d "$USER_HOME/.wine/drive_c/windows/syswow64" ] && [ -z "$(ls -A "$USER_HOME/.wine/drive_c/windows/syswow64")" ]; then
+    mv "$USER_HOME/.wine" "$USER_HOME/.wine.old-$(date +%Y%m%d%H%M%S)"
+    echo "  ย้ายโฟลเดอร์ ~/.wine เดิมที่ไม่มีส่วน 32 บิตไปเป็น ~/.wine.old-…"
+fi
 
 echo "▶ ทดสอบ Wine…"
 if VERSION="$(wine --version 2>/dev/null)"; then
