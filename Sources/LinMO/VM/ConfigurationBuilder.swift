@@ -36,7 +36,12 @@ enum ConfigurationBuilder {
 
         var storage: [VZStorageDeviceConfiguration] = [
             VZVirtioBlockDeviceConfiguration(
-                attachment: try VZDiskImageStorageDeviceAttachment(url: bundle.diskURL, readOnly: false)
+                attachment: try VZDiskImageStorageDeviceAttachment(
+                    url: bundle.diskURL,
+                    readOnly: false,
+                    cachingMode: .cached,
+                    synchronizationMode: .fsync
+                )
             )
         ]
         if config.attachCloudInitSeed, FileManager.default.fileExists(atPath: bundle.cloudInitSeedURL.path) {

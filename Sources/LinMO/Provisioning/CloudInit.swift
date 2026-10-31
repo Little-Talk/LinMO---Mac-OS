@@ -255,7 +255,7 @@ enum CloudInit {
 
     static let reporterScript = #"""
     #!/usr/bin/env python3
-    import json, os, re, socket, time
+    import json, os, re, socket, subprocess, time
 
     DONE = "/var/lib/cloud/instance/boot-finished"
     RESULT = "/run/cloud-init/result.json"
@@ -328,6 +328,14 @@ enum CloudInit {
         if finished and time.time() - finished_at > 30:
             break
         time.sleep(2)
+
+    try:
+        subprocess.run(["cloud-init", "status", "--wait"], timeout=900,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+    time.sleep(20)
+    subprocess.run(["systemctl", "reboot"])
 
     """#
 
