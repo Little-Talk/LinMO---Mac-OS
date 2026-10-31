@@ -1449,39 +1449,45 @@ class FolderSync:
     def poke(self, path, sig):
         try:
             if sig is None:
-                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-                os.close(fd)
-                os.unlink(path)
+                try:
+                    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                except FileExistsError:
+                    self.move_through(path)
+                else:
+                    os.close(fd)
+                    os.unlink(path)
             elif self.known.get(path) == sig[0] and not os.path.islink(path):
                 os.chmod(path, sig[3] & 0o7777)
             else:
-                self.counter += 1
-                temp = os.path.join(os.path.dirname(path), f"{self.PREFIX}{os.getpid()}-{self.counter}")
-                inside = os.path.join(temp, "item")
-                os.mkdir(temp, 0o700)
-                try:
-                    os.rename(path, inside)
-                    for attempt in range(5):
-                        try:
-                            os.rename(inside, path)
-                            break
-                        except OSError as exc:
-                            if attempt == 4:
-                                log("folder refresh could not restore", path, "from", inside, exc)
-                                raise
-                            time.sleep(0.05)
-                finally:
-                    try:
-                        os.rmdir(temp)
-                    except OSError:
-                        pass
+                self.move_through(path)
         except OSError as exc:
-            if sig is not None:
-                log("folder refresh failed:", path, exc)
+            log("folder refresh failed:", path, exc)
             return False
         self.local[path] = time.monotonic()
-        self.remember(path, sig)
+        self.remember(path, self.signature(path))
         return True
+
+    def move_through(self, path):
+        self.counter += 1
+        temp = os.path.join(os.path.dirname(path), f"{self.PREFIX}{os.getpid()}-{self.counter}")
+        inside = os.path.join(temp, "item")
+        os.mkdir(temp, 0o700)
+        try:
+            os.rename(path, inside)
+            for attempt in range(5):
+                try:
+                    os.rename(inside, path)
+                    break
+                except OSError as exc:
+                    if attempt == 4:
+                        log("folder refresh could not restore", path, "from", inside, exc)
+                        raise
+                    time.sleep(0.05)
+        finally:
+            try:
+                os.rmdir(temp)
+            except OSError:
+                pass
 
 
 class Tracked:
