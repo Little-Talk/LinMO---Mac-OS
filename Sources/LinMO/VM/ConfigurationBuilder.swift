@@ -66,6 +66,7 @@ enum ConfigurationBuilder {
         vz.storageDevices = storage
 
         let network = VZVirtioNetworkDeviceConfiguration()
+        network.macAddress = bundle.macAddress()
         network.attachment = VZNATNetworkDeviceAttachment()
         vz.networkDevices = [network]
 
