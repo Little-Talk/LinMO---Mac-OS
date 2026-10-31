@@ -1394,7 +1394,7 @@ class FolderSync:
             if not isinstance(rel, str):
                 continue
             parts = [p for p in rel.split("/") if p not in ("", ".", "..")]
-            if not parts or parts[-1].startswith(self.PREFIX):
+            if not parts or any(part.startswith(self.PREFIX) for part in parts):
                 continue
             path = os.path.join(self.root, *parts)
             self.pending[path] = [now + self.SETTLE, self.signature(path), now]
@@ -1457,16 +1457,24 @@ class FolderSync:
             else:
                 self.counter += 1
                 temp = os.path.join(os.path.dirname(path), f"{self.PREFIX}{os.getpid()}-{self.counter}")
-                os.rename(path, temp)
-                for attempt in range(5):
+                inside = os.path.join(temp, "item")
+                os.mkdir(temp, 0o700)
+                try:
+                    os.rename(path, inside)
+                    for attempt in range(5):
+                        try:
+                            os.rename(inside, path)
+                            break
+                        except OSError as exc:
+                            if attempt == 4:
+                                log("folder refresh could not restore", path, "from", inside, exc)
+                                raise
+                            time.sleep(0.05)
+                finally:
                     try:
-                        os.rename(temp, path)
-                        break
-                    except OSError as exc:
-                        if attempt == 4:
-                            log("folder refresh could not restore", path, "from", temp, exc)
-                            raise
-                        time.sleep(0.05)
+                        os.rmdir(temp)
+                    except OSError:
+                        pass
         except OSError as exc:
             if sig is not None:
                 log("folder refresh failed:", path, exc)
