@@ -156,15 +156,25 @@ EOF
 echo "▶ ติดตั้ง WineHQ (amd64 ผ่าน Rosetta)…"
 apt-get update -qq
 apt-get install -y --install-recommends winehq-stable:amd64
+for tool in wine wineserver winecfg wineboot winepath msiexec regedit; do
+    if ! command -v "$tool" >/dev/null 2>&1 && [ -x "/opt/wine-stable/bin/$tool" ]; then
+        ln -sf "/opt/wine-stable/bin/$tool" "/usr/local/bin/$tool"
+    fi
+done
+WINE="$(command -v wine || true)"
+if [ -z "$WINE" ]; then
+    echo "❌ ติดตั้ง winehq-stable แล้วแต่ไม่พบคำสั่ง wine" >&2
+    exit 1
+fi
 
 echo "▶ ตั้งให้ดับเบิลคลิกไฟล์ .exe แล้วเปิดด้วย Wine…"
 install -d /usr/share/applications
-cat > /usr/share/applications/linmo-wine.desktop <<'DESKTOP'
+cat > /usr/share/applications/linmo-wine.desktop <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=Wine
 Comment=Run Windows programs
-Exec=wine start /unix %f
+Exec=$WINE start /unix %f
 Icon=wine
 Terminal=false
 NoDisplay=true
