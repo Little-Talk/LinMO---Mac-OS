@@ -171,6 +171,50 @@ NoDisplay=true
 MimeType=application/x-ms-dos-executable;application/x-msdownload;application/x-msi;application/x-ms-shortcut;application/vnd.microsoft.portable-executable;
 DESKTOP
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true
+USER_HOME=""
+if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
+    USER_HOME="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+fi
+python3 - "$USER_HOME" "${SUDO_USER:-}" <<'PY'
+import os
+import pwd
+import sys
+
+home, user = sys.argv[1], sys.argv[2]
+types = [
+    "application/x-ms-dos-executable",
+    "application/x-msdownload",
+    "application/vnd.microsoft.portable-executable",
+    "application/x-msi",
+    "application/x-ms-shortcut",
+]
+
+def set_defaults(path):
+    lines = open(path).read().split("\n") if os.path.exists(path) else []
+    lines = [l for l in lines if l.split("=", 1)[0].strip() not in types]
+    section = next((i for i, l in enumerate(lines) if l.strip() == "[Default Applications]"), None)
+    entries = [f"{t}=linmo-wine.desktop" for t in types]
+    if section is None:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines += ["[Default Applications]"] + entries
+    else:
+        lines[section + 1:section + 1] = entries
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write("\n".join(lines).rstrip("\n") + "\n")
+
+set_defaults("/etc/xdg/mimeapps.list")
+set_defaults("/usr/share/applications/mimeapps.list")
+if home and user:
+    path = os.path.join(home, ".config", "mimeapps.list")
+    existed = os.path.isdir(os.path.dirname(path))
+    set_defaults(path)
+    pw = pwd.getpwnam(user)
+    os.chown(path, pw.pw_uid, pw.pw_gid)
+    if not existed:
+        os.chown(os.path.dirname(path), pw.pw_uid, pw.pw_gid)
+PY
 
 echo "▶ ทดสอบ Wine…"
 if VERSION="$(wine --version 2>/dev/null)"; then
