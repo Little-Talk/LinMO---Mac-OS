@@ -1,0 +1,22 @@
+[package]
+name = "linmo-wayland"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "LinMO: headless Wayland compositor that shows each Linux app window as a Mac window"
+license = "MIT"
+
+[dependencies]
+smithay = { version = "0.7", default-features = false, features = ["wayland_frontend", "desktop", "renderer_pixman", "xwayland"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+libc = "0.2"
+base64 = "0.22"
+png = "0.17"
+resvg = { version = "0.45.1", default-features = false }
+
+[profile.release]
+lto = "thin"
+strip = true

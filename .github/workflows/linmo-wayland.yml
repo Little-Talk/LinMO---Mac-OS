@@ -1,0 +1,74 @@
+name: linmo-wayland (ARM64)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "guest/linmo-wayland/**"
+      - "guest/tests/wayland_*.py"
+      - "guest/tests/agent_*.py"
+      - "guest/linmo-agent.py"
+      - ".github/workflows/linmo-wayland.yml"
+  pull_request:
+    paths:
+      - "guest/linmo-wayland/**"
+      - "guest/tests/wayland_*.py"
+      - "guest/tests/agent_*.py"
+      - "guest/linmo-agent.py"
+      - ".github/workflows/linmo-wayland.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libpixman-1-dev pkg-config foot \
+            python3-gi gir1.2-gtk-3.0 libgtk-3-bin xwayland libegl1 xterm xclip \
+            xvfb python3-xlib
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        working-directory: guest/linmo-wayland
+        run: cargo build --release --locked
+
+      - name: Smoke test with a real Wayland app
+        run: python3 guest/tests/wayland_smoke.py guest/linmo-wayland/target/release/linmo-wayland
+
+      - name: Clipboard, drag and drop, icons, menus and text input with a GTK app
+        run: /usr/bin/python3 guest/tests/wayland_features.py guest/linmo-wayland/target/release/linmo-wayland
+
+      - name: X11 apps through rootless XWayland
+        run: /usr/bin/python3 guest/tests/wayland_xwayland.py guest/linmo-wayland/target/release/linmo-wayland
+
+      - name: Copy-paste in the X11 agent
+        run: /usr/bin/python3 guest/tests/agent_clipboard.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linmo-wayland-aarch64
+          path: guest/linmo-wayland/target/release/linmo-wayland
+
+      - name: Commit binary
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p guest/bin
+          cp guest/linmo-wayland/target/release/linmo-wayland guest/bin/linmo-wayland-aarch64
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add guest/bin/linmo-wayland-aarch64
+          if git diff --cached --quiet; then
+            echo "binary unchanged"
+          else
+            git commit -m "Build linmo-wayland for ARM64 (${GITHUB_SHA::7})"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
