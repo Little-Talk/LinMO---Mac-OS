@@ -122,11 +122,20 @@ struct SeamlessLauncherView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("โหมดหน้าต่างแยก")
-                    .font(.title2.bold())
-                Text("แอพ Linux จะเปิดเป็นหน้าต่างของตัวเองบน Mac เลือกแอพด้านล่างเพื่อเปิด หรือกดปุ่ม \"หน้าต่างแยก\" อีกครั้งเพื่อกลับไปดูหน้าจอ Linux ทั้งจอ")
+                HStack(alignment: .firstTextBaseline) {
+                    Text("โหมดหน้าต่างแยก")
+                        .font(.title2.bold())
+                    Spacer()
+                    Button {
+                        session.setEnabled(false)
+                    } label: {
+                        Label("กลับไปหน้าจอ Linux", systemImage: "chevron.backward")
+                    }
+                    .help("ปิดโหมดหน้าต่างแยก แล้วกลับไปดูหน้าจอ Linux ทั้งจอ")
+                }
+                Text("แอพ Linux จะเปิดเป็นหน้าต่างของตัวเองบน Mac เลือกแอพด้านล่างเพื่อเปิด หรือกดปุ่ม \"กลับไปหน้าจอ Linux\" เพื่อกลับไปดูหน้าจอ Linux ทั้งจอ")
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(3)
                 TextField("ค้นหาแอพ", text: $search)
                     .textFieldStyle(.roundedBorder)
                     .padding(.top, 6)
@@ -163,8 +172,10 @@ struct SeamlessLauncherView: View {
                     .buttonStyle(.plain)
                     .padding(.vertical, 3)
                 }
+                .frame(maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private func icon(for app: SeamlessSession.App) -> String {
