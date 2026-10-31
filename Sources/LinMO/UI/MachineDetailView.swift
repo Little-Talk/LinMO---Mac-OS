@@ -112,7 +112,7 @@ struct MachineDetailView: View {
     @ViewBuilder
     private var display: some View {
         if let vm = machine.virtualMachine {
-            RunningDisplay(vm: vm, seamless: machine.seamless)
+            RunningDisplay(controller: machine, vm: vm, seamless: machine.seamless)
                 .overlay(alignment: .bottom) {
                     if let status = machine.setupStatus {
                         SetupProgressBanner(status: status) {

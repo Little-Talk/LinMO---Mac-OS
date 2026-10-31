@@ -34,13 +34,15 @@ struct StatusBadge: View {
 }
 
 struct VMDisplayView: NSViewRepresentable {
+    let controller: MachineController
     let machine: VZVirtualMachine
 
     func makeNSView(context: Context) -> VZVirtualMachineView {
-        let view = VZVirtualMachineView()
-        view.virtualMachine = machine
-        view.capturesSystemKeys = true
-        view.automaticallyReconfiguresDisplay = true
+        let view = controller.display(for: machine)
+        view.removeFromSuperview()
+        DispatchQueue.main.async {
+            view.window?.makeFirstResponder(view)
+        }
         return view
     }
 

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Virtualization
 
@@ -18,6 +19,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     @Published var errorMessage: String?
 
     private var setupListener: SetupProgressListener?
+    private var displayView: VZVirtualMachineView?
     let seamless: SeamlessSession
     private var restartAfterSetup = false
     private let fileAccess = SecurityScopedAccess()
@@ -174,6 +176,18 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         }
     }
 
+    func display(for vm: VZVirtualMachine) -> VZVirtualMachineView {
+        if let view = displayView, view.virtualMachine === vm {
+            return view
+        }
+        let view = VZVirtualMachineView()
+        view.virtualMachine = vm
+        view.capturesSystemKeys = true
+        view.automaticallyReconfiguresDisplay = true
+        displayView = view
+        return view
+    }
+
     fileprivate func didStop() {
         fileAccess.endAll()
         seamless.detach(from: virtualMachine)
@@ -183,6 +197,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             setupStatus = nil
         }
         virtualMachine = nil
+        displayView = nil
         state = .stopped
 
         if restartAfterSetup {

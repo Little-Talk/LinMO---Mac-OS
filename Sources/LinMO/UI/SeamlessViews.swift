@@ -95,6 +95,7 @@ struct FullScreenButton: View {
 }
 
 struct RunningDisplay: View {
+    let controller: MachineController
     let vm: VZVirtualMachine
     @ObservedObject var seamless: SeamlessSession
 
@@ -102,7 +103,7 @@ struct RunningDisplay: View {
         if seamless.isEnabled {
             SeamlessLauncherView(session: seamless)
         } else {
-            VMDisplayView(machine: vm)
+            VMDisplayView(controller: controller, machine: vm)
         }
     }
 }
