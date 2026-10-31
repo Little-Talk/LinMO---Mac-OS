@@ -61,15 +61,37 @@ private struct MachineAppsSection: View {
     }
 }
 
+@MainActor
+final class MenuBarSetting: ObservableObject {
+    static let shared = MenuBarSetting()
+
+    @Published private(set) var isInserted: Bool
+
+    private init() {
+        UserDefaults.standard.register(defaults: [LinuxAppCatalog.Keys.menuBar: true])
+        isInserted = UserDefaults.standard.bool(forKey: LinuxAppCatalog.Keys.menuBar)
+    }
+
+    func set(_ value: Bool) {
+        guard value != isInserted else { return }
+        isInserted = value
+        UserDefaults.standard.set(value, forKey: LinuxAppCatalog.Keys.menuBar)
+    }
+
+    var binding: Binding<Bool> {
+        Binding(get: { self.isInserted }, set: { self.set($0) })
+    }
+}
+
 struct LinuxAppsSettingsSection: View {
-    @AppStorage(LinuxAppCatalog.Keys.menuBar) private var menuBar = true
+    @ObservedObject private var menuBar = MenuBarSetting.shared
     @AppStorage(LinuxAppCatalog.Keys.spotlight) private var spotlight = true
     @AppStorage(LinuxAppCatalog.Keys.launchpad) private var launchpad = false
     @ObservedObject private var catalog = LinuxAppCatalog.shared
 
     var body: some View {
         Section {
-            Toggle("แสดงเมนู \"แอพ Linux\" บนแถบเมนู", isOn: $menuBar)
+            Toggle("แสดงเมนู \"แอพ Linux\" บนแถบเมนู", isOn: menuBar.binding)
             Toggle("ค้นหาแอพ Linux ใน Spotlight", isOn: $spotlight)
                 .onChange(of: spotlight) { catalog.refreshSpotlight() }
             if LaunchpadShortcuts.isAvailable {
