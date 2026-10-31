@@ -155,15 +155,19 @@ EOF
 
 echo "▶ ติดตั้ง WineHQ (amd64 ผ่าน Rosetta)…"
 apt-get update -qq
-apt-get install -y --install-recommends winehq-stable:amd64
-for tool in wine wineserver winecfg wineboot winepath msiexec regedit; do
-    if ! command -v "$tool" >/dev/null 2>&1 && [ -x "/opt/wine-stable/bin/$tool" ]; then
-        ln -sf "/opt/wine-stable/bin/$tool" "/usr/local/bin/$tool"
+apt-get install -y wine-stable-amd64:amd64
+for path in /opt/wine-stable/bin/*; do
+    tool="$(basename "$path")"
+    if ! command -v "$tool" >/dev/null 2>&1; then
+        ln -sf "$path" "/usr/local/bin/$tool"
     fi
 done
+if ! command -v wine >/dev/null 2>&1 && [ -x /opt/wine-stable/bin/wine64 ]; then
+    ln -sf /opt/wine-stable/bin/wine64 /usr/local/bin/wine
+fi
 WINE="$(command -v wine || true)"
 if [ -z "$WINE" ]; then
-    echo "❌ ติดตั้ง winehq-stable แล้วแต่ไม่พบคำสั่ง wine" >&2
+    echo "❌ ติดตั้ง Wine แล้วแต่ไม่พบคำสั่ง wine" >&2
     exit 1
 fi
 
