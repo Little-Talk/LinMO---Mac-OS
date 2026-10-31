@@ -161,13 +161,16 @@ if [ -z "$WINE_VERSION" ] || [ "$WINE_VERSION" = "(none)" ]; then
     echo "❌ ไม่พบแพ็กเกจ wine-stable ในคลัง WineHQ" >&2
     exit 1
 fi
-if [ "$(dpkg-query -W -f='${Version} ${Architecture}' wine-stable-i386 2>/dev/null || true)" != "$WINE_VERSION amd64" ]; then
+if [ "$(dpkg-query -W -f='${Version} ${Architecture}' wine-stable-i386 2>/dev/null || true)" != "$WINE_VERSION amd64" ] || [ ! -d /opt/wine-stable/lib/wine/i386-windows ]; then
     WORK="$(mktemp -d)"
     chmod 0755 "$WORK"
+    WINEHQ_SOURCES="/etc/apt/sources.list.d/winehq-$CODENAME.sources"
+    sed -i 's/^Architectures: amd64$/Architectures: amd64 i386/' "$WINEHQ_SOURCES"
     dpkg --add-architecture i386
     apt-get update -qq || true
-    (cd "$WORK" && apt-get download -qq "wine-stable-i386:i386=$WINE_VERSION") || true
+    (cd "$WORK" && apt-get download "wine-stable-i386:i386=$WINE_VERSION") || true
     dpkg --remove-architecture i386
+    sed -i 's/^Architectures: amd64 i386$/Architectures: amd64/' "$WINEHQ_SOURCES"
     apt-get update -qq || true
     mkdir -p "$WORK/pkg/DEBIAN"
     DEB="$(ls "$WORK"/wine-stable-i386_*.deb 2>/dev/null | head -n 1)"
@@ -177,6 +180,9 @@ if [ "$(dpkg-query -W -f='${Version} ${Architecture}' wine-stable-i386 2>/dev/nu
             mkdir -p "$WORK/pkg/opt/wine-stable/lib/wine"
             cp -a "$WORK/full/opt/wine-stable/lib/wine/i386-windows" "$WORK/pkg/opt/wine-stable/lib/wine/"
         fi
+    fi
+    if [ ! -d "$WORK/pkg/opt/wine-stable/lib/wine/i386-windows" ]; then
+        echo "  ⚠️  โหลดไฟล์ Wine 32 บิตไม่สำเร็จ — โปรแกรม Windows 32 บิตจะเปิดไม่ได้" >&2
     fi
     cat > "$WORK/pkg/DEBIAN/control" <<CONTROL
 Package: wine-stable-i386
