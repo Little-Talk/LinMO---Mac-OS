@@ -6,7 +6,7 @@ import SwiftUI
 struct LinMOApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var library = MachineLibrary.shared
-    @AppStorage(LinuxAppCatalog.Keys.menuBar) private var showsLinuxAppsMenu = true
+    @StateObject private var menuBarSetting = MenuBarSetting.shared
 
     var body: some Scene {
         Window("LinMO", id: "main") {
@@ -18,7 +18,7 @@ struct LinMOApp: App {
             SettingsView()
         }
 
-        MenuBarExtra("แอพ Linux", systemImage: "square.grid.2x2", isInserted: $showsLinuxAppsMenu) {
+        MenuBarExtra("แอพ Linux", systemImage: "square.grid.2x2", isInserted: menuBarSetting.binding) {
             LinuxAppsMenu()
                 .environmentObject(library)
         }
