@@ -160,7 +160,7 @@ PY
 dpkg --add-architecture amd64
 
 echo "▶ เพิ่มคลัง WineHQ ($BASE $CODENAME)…"
-apt-get update -qq || true
+apt-get update -q || true
 apt-get install -y -qq ca-certificates wget >/dev/null
 if ! wget -q --spider "https://dl.winehq.org/wine-builds/$BASE/dists/$CODENAME/Release"; then
     echo "❌ WineHQ ยังไม่มีแพ็กเกจสำหรับ $BASE $CODENAME" >&2
@@ -180,7 +180,7 @@ EOF
 
 echo "▶ ติดตั้ง WineHQ (amd64 ผ่าน Rosetta)…"
 [ -L "/usr/local/bin/*" ] && rm -f "/usr/local/bin/*"
-apt-get update -qq
+apt-get update -q
 WINE_VERSION="$(apt-cache policy wine-stable:amd64 | awk '/Candidate:/ {print $2}')"
 if [ -z "$WINE_VERSION" ] || [ "$WINE_VERSION" = "(none)" ]; then
     echo "❌ ไม่พบแพ็กเกจ wine-stable ในคลัง WineHQ" >&2
@@ -192,11 +192,12 @@ if [ "$(dpkg-query -W -f='${Version} ${Architecture}' wine-stable-i386 2>/dev/nu
     WINEHQ_SOURCES="/etc/apt/sources.list.d/winehq-$CODENAME.sources"
     sed -i 's/^Architectures: amd64$/Architectures: amd64 i386/' "$WINEHQ_SOURCES"
     dpkg --add-architecture i386
-    apt-get update -qq || true
+    apt-get update -q || true
+    echo "▶ ดาวน์โหลดไฟล์ Wine 32 บิต (ประมาณ 100 MB)…"
     (cd "$WORK" && apt-get download "wine-stable-i386:i386=$WINE_VERSION") || true
     dpkg --remove-architecture i386
     sed -i 's/^Architectures: amd64 i386$/Architectures: amd64/' "$WINEHQ_SOURCES"
-    apt-get update -qq || true
+    apt-get update -q || true
     mkdir -p "$WORK/pkg/DEBIAN"
     DEB="$(ls "$WORK"/wine-stable-i386_*.deb 2>/dev/null | head -n 1)"
     if [ -n "$DEB" ]; then
@@ -229,7 +230,7 @@ if [ -n "$WINEHQ_PKGS" ]; then
 fi
 
 echo "▶ หา Hangover สำหรับ $BASE $CODENAME…"
-apt-get update -qq || true
+apt-get update -q || true
 apt-get install -y -qq ca-certificates wget >/dev/null
 URL="$(python3 - "$BASE" "$CODENAME" "${VERSION_ID:-}" <<'PY'
 import json
@@ -270,7 +271,7 @@ fi
 echo "▶ ติดตั้ง Hangover ($(basename "$URL"))…"
 WORK="$(mktemp -d)"
 chmod 0755 "$WORK"
-wget -q -O "$WORK/hangover.tar" "$URL"
+wget -q --show-progress -O "$WORK/hangover.tar" "$URL"
 tar -xf "$WORK/hangover.tar" -C "$WORK"
 DEBS="$(find "$WORK" -name '*.deb' | sort)"
 if [ -z "$DEBS" ]; then
