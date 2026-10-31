@@ -13,6 +13,14 @@ struct LinMOApp: App {
             ContentView()
                 .environmentObject(library)
         }
+        .commands {
+            UserGuideCommands()
+        }
+
+        Window(GuideLanguage.systemDefault == .thai ? "คู่มือ LinMO" : "LinMO Guide", id: "guide") {
+            UserGuideView()
+        }
+        .defaultSize(width: 920, height: 640)
 
         Settings {
             SettingsView()
