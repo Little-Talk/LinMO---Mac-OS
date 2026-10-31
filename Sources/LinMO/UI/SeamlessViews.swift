@@ -79,6 +79,55 @@ struct AgentInstallHelp: View {
     }
 }
 
+struct WineInstallButton: View {
+    let rosettaEnabled: Bool
+    @State private var showing = false
+    @State private var copied = false
+
+    var body: some View {
+        Button {
+            copied = false
+            showing = true
+        } label: {
+            Label("Wine", systemImage: "wineglass")
+        }
+        .help("ติดตั้ง WineHQ เพื่อเปิดโปรแกรม Windows ใน Linux")
+        .popover(isPresented: $showing, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("ติดตั้ง WineHQ")
+                    .font(.headline)
+                if rosettaEnabled {
+                    Text("Wine จะรันผ่าน Rosetta และเปิดโปรแกรม Windows ได้ทั้ง 32 และ 64 บิต รองรับ Debian และ Ubuntu เปิด Terminal ใน Linux แล้ววางคำสั่งนี้:")
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(GuestTools.wineInstallCommand)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                    HStack {
+                        Button(copied ? "คัดลอกแล้ว" : "คัดลอกคำสั่ง") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(GuestTools.wineInstallCommand, forType: .string)
+                            copied = true
+                        }
+                        Spacer()
+                    }
+                    Text("ติดตั้งเสร็จแล้วดับเบิลคลิกไฟล์ .exe หรือพิมพ์ wine ชื่อไฟล์.exe ใน Terminal")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Wine ต้องใช้ Rosetta ให้ปิดเครื่อง เปิด \"รันโปรแกรม x86_64 ผ่าน Rosetta\" ในตั้งค่าเครื่อง แล้วเปิดเครื่องและกดปุ่มนี้อีกครั้ง")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(16)
+            .frame(width: 440)
+        }
+    }
+}
+
 struct FullScreenButton: View {
     @ObservedObject var session: SeamlessSession
 

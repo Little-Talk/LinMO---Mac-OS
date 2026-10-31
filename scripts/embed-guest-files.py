@@ -7,6 +7,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 FILES = {
     "agent": "guest/linmo-agent.py",
     "install": "guest/install.sh",
+    "installWine": "guest/install-wine.sh",
 }
 OUT = ROOT / "Sources/LinMO/Guest/GuestFiles.generated.swift"
 WAYLAND = ROOT / "guest/linmo-wayland"

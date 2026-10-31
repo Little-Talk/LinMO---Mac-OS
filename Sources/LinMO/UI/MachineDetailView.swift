@@ -92,6 +92,7 @@ struct MachineDetailView: View {
             if machine.state == .running {
                 SeamlessToggle(session: machine.seamless)
                 FullScreenButton(session: machine.seamless)
+                WineInstallButton(rosettaEnabled: machine.config.rosettaEnabled)
 
                 Button {
                     machine.requestShutdown()
