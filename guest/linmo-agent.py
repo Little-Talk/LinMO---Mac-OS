@@ -28,8 +28,8 @@ try:
 except ImportError:
     xfixes = None
 
-VERSION = 5
-FEATURES = ["damage", "icons", "text", "drop", "scale", "shm", "dragout"]
+VERSION = 6
+FEATURES = ["damage", "icons", "text", "drop", "scale", "shm", "dragout", "folders"]
 HOST_CID = 2
 PORT = int(os.environ.get("LINMO_AGENT_PORT", "5200"))
 
@@ -58,6 +58,7 @@ MSG_DROP = 0x1A
 MSG_CONFIG = 0x1B
 MSG_DRAG_OUT = 0x1C
 MSG_SET_CLIPBOARD = 0x1D
+MSG_FOLDER_CHANGED = 0x20
 
 FRAME_INTERVAL = 1 / 30
 SCAN_INTERVAL = 0.25
@@ -1175,6 +1176,305 @@ def public_apps():
     return {"apps": [{k: v for k, v in a.items() if k != "path"} for a in list_apps()]}
 
 
+IN_MODIFY = 0x00000002
+IN_ATTRIB = 0x00000004
+IN_CLOSE_WRITE = 0x00000008
+IN_MOVED_FROM = 0x00000040
+IN_MOVED_TO = 0x00000080
+IN_CREATE = 0x00000100
+IN_DELETE = 0x00000200
+IN_IGNORED = 0x00008000
+IN_NONBLOCK = 0o4000
+IN_CLOEXEC = 0o2000000
+LOCAL_MASK = IN_MODIFY | IN_ATTRIB | IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_CREATE | IN_DELETE
+INOTIFY_EVENT = struct.Struct("iIII")
+
+
+class FolderSync:
+    TAG = "linmo"
+    PREFIX = ".linmo-refresh-"
+    SETTLE = 0.8
+    LOCAL_WINDOW = 3.0
+    VIEW_INTERVAL = 3.0
+    RESCAN_INTERVAL = 20.0
+    MAX_CHILDREN = 512
+
+    def __init__(self):
+        self.root = None
+        self.dev = None
+        self.watches = {}
+        self.watched = {}
+        self.notifiers = []
+        self.viewed = set()
+        self.viewed_at = 0.0
+        self.scanned_at = float("-inf")
+        self.local = {}
+        self.pending = {}
+        self.known = {}
+        self.counter = 0
+        self.libc = None
+        self.fd = -1
+        try:
+            self.libc = ctypes.CDLL(ctypes.util.find_library("c") or "libc.so.6", use_errno=True)
+            self.fd = self.libc.inotify_init1(IN_NONBLOCK | IN_CLOEXEC)
+        except (OSError, AttributeError):
+            self.fd = -1
+        self.locate()
+
+    def fileno(self):
+        return self.fd
+
+    @staticmethod
+    def unescape(field):
+        for code, char in (("\\040", " "), ("\\011", "\t"), ("\\012", "\n"), ("\\134", "\\")):
+            field = field.replace(code, char)
+        return field
+
+    def locate(self):
+        if self.root and os.path.ismount(self.root):
+            return self.root
+        self.root = None
+        try:
+            with open("/proc/self/mountinfo", encoding="utf-8", errors="surrogateescape") as f:
+                for line in f:
+                    left, _, right = line.partition(" - ")
+                    fields, extra = left.split(), right.split()
+                    if len(fields) > 4 and len(extra) >= 2 and extra[0] == "virtiofs" and extra[1] == self.TAG:
+                        self.root = self.unescape(fields[4])
+                        break
+            if self.root:
+                self.dev = os.stat(self.root).st_dev
+        except OSError:
+            self.root = None
+        return self.root
+
+    def inode(self, path):
+        try:
+            st = os.stat(path)
+        except OSError:
+            return None
+        return st.st_ino if st.st_dev == self.dev else None
+
+    @staticmethod
+    def signature(path):
+        try:
+            st = os.lstat(path)
+        except OSError:
+            return None
+        return (st.st_ino, st.st_size, st.st_mtime_ns, st.st_mode)
+
+    def find_notifiers(self):
+        found = []
+        me = str(os.getpid())
+        for pid in os.listdir("/proc"):
+            if not pid.isdigit() or pid == me:
+                continue
+            base = f"/proc/{pid}/fd"
+            try:
+                fds = os.listdir(base)
+            except OSError:
+                continue
+            for fd in fds:
+                try:
+                    if os.readlink(f"{base}/{fd}") == "anon_inode:inotify":
+                        found.append(f"/proc/{pid}/fdinfo/{fd}")
+                except OSError:
+                    continue
+        return found
+
+    def refresh(self, now, full=False):
+        self.viewed_at = now
+        if self.dev is None:
+            return
+        if full or now - self.scanned_at >= self.RESCAN_INTERVAL:
+            self.scanned_at = now
+            self.notifiers = self.find_notifiers()
+        major, minor = os.major(self.dev), os.minor(self.dev)
+        viewed, alive = set(), []
+        for info in self.notifiers:
+            try:
+                with open(info) as f:
+                    lines = f.readlines()
+            except OSError:
+                continue
+            alive.append(info)
+            for line in lines:
+                if not line.startswith("inotify "):
+                    continue
+                fields = dict(part.split(":", 1) for part in line.split()[1:] if ":" in part)
+                try:
+                    sdev = int(fields.get("sdev", "0"), 16)
+                    if (sdev >> 20, sdev & 0xFFFFF) == (major, minor):
+                        viewed.add(int(fields.get("ino", "0"), 16))
+                except ValueError:
+                    continue
+        self.notifiers = alive
+        self.viewed = viewed
+        self.sync_watches()
+
+    def children(self, base):
+        found = []
+        try:
+            with os.scandir(base) as entries:
+                for entry in entries:
+                    if len(found) >= self.MAX_CHILDREN:
+                        break
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            found.append(entry.path)
+                    except OSError:
+                        continue
+        except OSError:
+            pass
+        return found
+
+    def sync_watches(self):
+        if self.fd < 0 or not self.root:
+            return
+        wanted = set()
+        for base in {self.root, *self.watched}:
+            for path in [base] + self.children(base):
+                if self.inode(path) in self.viewed:
+                    wanted.add(path)
+        for path in list(self.watched):
+            if path not in wanted and self.inode(path) not in self.viewed:
+                self.unwatch(path)
+        for path in wanted:
+            self.watch(path)
+
+    def watch(self, path):
+        if self.fd < 0 or path in self.watched:
+            return
+        wd = self.libc.inotify_add_watch(self.fd, os.fsencode(path), LOCAL_MASK)
+        if wd >= 0:
+            old = self.watches.get(wd)
+            if old is not None:
+                self.watched.pop(old, None)
+            self.watched[path] = wd
+            self.watches[wd] = path
+
+    def unwatch(self, path):
+        wd = self.watched.pop(path, None)
+        if wd is None:
+            return
+        self.watches.pop(wd, None)
+        self.libc.inotify_rm_watch(self.fd, wd)
+
+    def read_local(self):
+        now = time.monotonic()
+        while True:
+            try:
+                data = os.read(self.fd, 65536)
+            except OSError:
+                return
+            if not data:
+                return
+            offset = 0
+            while offset + INOTIFY_EVENT.size <= len(data):
+                wd, mask, _, length = INOTIFY_EVENT.unpack_from(data, offset)
+                name = data[offset + INOTIFY_EVENT.size:offset + INOTIFY_EVENT.size + length].rstrip(b"\0")
+                offset += INOTIFY_EVENT.size + length
+                base = self.watches.get(wd)
+                if base is None:
+                    continue
+                if mask & IN_IGNORED:
+                    self.watches.pop(wd, None)
+                    if self.watched.get(base) == wd:
+                        self.watched.pop(base, None)
+                    continue
+                if name:
+                    self.local[os.path.join(base, os.fsdecode(name))] = now
+
+    def changed(self, paths):
+        if not isinstance(paths, list) or not self.locate():
+            return
+        now = time.monotonic()
+        self.refresh(now, full=now - self.scanned_at >= self.VIEW_INTERVAL)
+        for rel in paths:
+            if not isinstance(rel, str):
+                continue
+            parts = [p for p in rel.split("/") if p not in ("", ".", "..")]
+            if not parts or parts[-1].startswith(self.PREFIX):
+                continue
+            path = os.path.join(self.root, *parts)
+            self.pending[path] = [now + self.SETTLE, self.signature(path), now]
+            for depth in range(1, len(parts)):
+                entry = self.pending.get(os.path.join(self.root, *parts[:depth]))
+                if entry is not None:
+                    entry[0] = now + self.SETTLE
+
+    def deadline(self):
+        due = min((entry[0] for entry in self.pending.values()), default=float("inf"))
+        if self.root:
+            due = min(due, self.viewed_at + self.VIEW_INTERVAL)
+        return due
+
+    def tick(self, now):
+        if now - self.viewed_at >= self.VIEW_INTERVAL:
+            if self.locate():
+                self.refresh(now)
+            else:
+                self.viewed_at = now
+            self.local = {p: t for p, t in self.local.items() if now - t < self.LOCAL_WINDOW * 2}
+        ready = sorted(path for path, entry in self.pending.items() if entry[0] <= now)
+        poked = []
+        for path in ready:
+            _, sig, arrived = self.pending.pop(path)
+            current = self.signature(path)
+            if current != sig:
+                self.pending[path] = [now + self.SETTLE, current, arrived]
+                continue
+            if any(path.startswith(done + "/") for done in poked):
+                self.remember(path, current)
+                continue
+            if self.local.get(path, float("-inf")) >= arrived - self.LOCAL_WINDOW:
+                self.remember(path, current)
+                continue
+            parent = os.path.dirname(path)
+            if self.inode(parent) not in self.viewed:
+                self.remember(path, current)
+                continue
+            self.watch(parent)
+            if self.poke(path, current):
+                poked.append(path)
+
+    def remember(self, path, sig):
+        if len(self.known) > 50000:
+            self.known.clear()
+        if sig is None:
+            self.known.pop(path, None)
+        else:
+            self.known[path] = sig[0]
+
+    def poke(self, path, sig):
+        try:
+            if sig is None:
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                os.close(fd)
+                os.unlink(path)
+            elif self.known.get(path) == sig[0] and not os.path.islink(path):
+                os.chmod(path, sig[3] & 0o7777)
+            else:
+                self.counter += 1
+                temp = os.path.join(os.path.dirname(path), f"{self.PREFIX}{os.getpid()}-{self.counter}")
+                os.rename(path, temp)
+                for attempt in range(5):
+                    try:
+                        os.rename(temp, path)
+                        break
+                    except OSError as exc:
+                        if attempt == 4:
+                            log("folder refresh could not restore", path, "from", temp, exc)
+                            raise
+                        time.sleep(0.05)
+        except OSError as exc:
+            if sig is not None:
+                log("folder refresh failed:", path, exc)
+            return False
+        self.local[path] = time.monotonic()
+        self.remember(path, sig)
+        return True
+
 
 class Tracked:
 
@@ -1188,9 +1488,10 @@ class Tracked:
 
 
 class Agent:
-    def __init__(self, desktop, channel):
+    def __init__(self, desktop, channel, folders):
         self.x = desktop
         self.ch = channel
+        self.folders = folders
         self.windows = {}
         self.streaming = False
         self.last_scan = 0.0
@@ -1395,6 +1696,8 @@ class Agent:
                 except ValueError:
                     pass
             self.x.clipboard.set_from_mac(text if isinstance(text, str) and text else None, png)
+        elif kind == MSG_FOLDER_CHANGED:
+            self.folders.changed(msg.get("paths"))
         elif kind == MSG_CONFIG:
             if "scale" in msg:
                 apply_scale(float(msg["scale"]))
@@ -1416,11 +1719,15 @@ class Agent:
         while True:
             now = time.monotonic()
             deadline = min(self.last_scan + SCAN_INTERVAL,
-                           self.last_frame + FRAME_INTERVAL if self.streaming else float("inf"))
+                           self.last_frame + FRAME_INTERVAL if self.streaming else float("inf"),
+                           self.folders.deadline())
             wait_w = [self.ch] if self.ch.outbox else []
-            readable, writable, _ = select.select([self.ch, x_fd], wait_w, [], max(0.0, deadline - now))
+            wait_r = [self.ch, x_fd] + ([self.folders] if self.folders.fd >= 0 else [])
+            readable, writable, _ = select.select(wait_r, wait_w, [], max(0.0, deadline - now))
             if writable:
                 self.ch.flush()
+            if self.folders in readable:
+                self.folders.read_local()
             if self.ch in readable:
                 for kind, msg in self.ch.receive():
                     try:
@@ -1429,6 +1736,10 @@ class Agent:
                         log("command failed:", exc)
             self.drain_x_events()
             now = time.monotonic()
+            try:
+                self.folders.tick(now)
+            except OSError as exc:
+                log("folder refresh failed:", exc)
             if now - self.last_scan >= SCAN_INTERVAL:
                 self.last_scan = now
                 self.scan()
@@ -1454,13 +1765,14 @@ def main():
         return 1
     log("started on", os.environ.get("DISPLAY"), "screen", desktop.screen_size,
         "damage" if desktop.damage_event else "no-damage")
+    folders = FolderSync()
     while True:
         channel = connect()
         if channel is None:
             time.sleep(2)
             continue
         log("connected to LinMO")
-        agent = Agent(desktop, channel)
+        agent = Agent(desktop, channel, folders)
         try:
             agent.run()
         except (EOFError, OSError) as exc:

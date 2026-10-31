@@ -52,7 +52,7 @@ struct AgentInstallHelp: View {
             Text(isUpdate ? "อัปเดต LinMO Agent" : "ยังไม่พบ LinMO Agent")
                 .font(.headline)
             Text(isUpdate
-                 ? "agent ใน Linux เป็นรุ่นเก่า รุ่นใหม่ทำให้หน้าต่างลื่นขึ้น คมชัดบน Retina พิมพ์ไทยด้วยแป้นพิมพ์ Mac และลากไฟล์มาวางได้ เปิด Terminal ใน Linux แล้ววางคำสั่งนี้:"
+                 ? "agent ใน Linux เป็นรุ่นเก่า รุ่นใหม่ทำให้หน้าต่างลื่นขึ้น คมชัดบน Retina พิมพ์ไทยด้วยแป้นพิมพ์ Mac ลากไฟล์มาวางได้ และไฟล์ในโฟลเดอร์แชร์อัปเดตเองทันที เปิด Terminal ใน Linux แล้ววางคำสั่งนี้:"
                  : "โหมดหน้าต่างแยกต้องใช้ LinMO Agent ใน Linux เครื่องที่สร้างด้วยตัวช่วยติดตั้งตั้งแต่ v0.4 จะมีให้แล้ว ถ้ายังไม่มี ให้เปิด Terminal ใน Linux แล้ววางคำสั่งนี้:")
                 .fixedSize(horizontal: false, vertical: true)
             Text(GuestTools.installCommand)
