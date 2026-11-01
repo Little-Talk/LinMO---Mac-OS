@@ -23,6 +23,8 @@ final class SeamlessSession: ObservableObject {
         let w: Int
         let h: Int
         let parent: UInt32
+        var minW: Int? = nil
+        var minH: Int? = nil
 
         var isPopup: Bool { kind == "popup" }
     }

@@ -14,7 +14,7 @@ import sys
 import time
 import zlib
 
-from Xlib import X, Xatom, display, error
+from Xlib import X, Xatom, Xutil, display, error
 from Xlib.ext import composite, xtest
 from Xlib.protocol import event as xevent
 
@@ -436,13 +436,39 @@ class Desktop:
         except error.XError:
             return 0
 
-    def geometry(self, win):
+    def raw_geometry(self, win):
         try:
             geo = win.get_geometry()
             pos = win.translate_coords(self.root, 0, 0)
             return -pos.x, -pos.y, geo.width, geo.height
         except error.XError:
             return None
+
+    def insets(self, win):
+        value = self._prop(win, "_GTK_FRAME_EXTENTS", Xatom.CARDINAL)
+        if value is not None and len(value) >= 4:
+            return tuple(max(0, int(v)) for v in value[:4])
+        return 0, 0, 0, 0
+
+    def geometry(self, win):
+        geo = self.raw_geometry(win)
+        if not geo:
+            return None
+        x, y, w, h = geo
+        left, right, top, bottom = self.insets(win)
+        if w - left - right < 1 or h - top - bottom < 1:
+            return geo
+        return x + left, y + top, w - left - right, h - top - bottom
+
+    def min_size(self, win):
+        try:
+            hints = win.get_wm_normal_hints()
+        except error.XError:
+            return 0, 0
+        if not hints or not (hints.flags & Xutil.PMinSize):
+            return 0, 0
+        left, right, top, bottom = self.insets(win)
+        return max(0, hints.min_width - left - right), max(0, hints.min_height - top - bottom)
 
     def popups(self):
         result = []
@@ -572,18 +598,19 @@ class Desktop:
         win = self.window(wid)
         ax, ay, aw, ah = self.workarea()
         left, right, top, bottom = self.frame_extents(win)
+        il, ir, it, ib = self.insets(win)
         w = max(1, min(int(w), aw - left - right))
         h = max(1, min(int(h), ah - top - bottom))
         self.unmaximize(win)
         flags = (1 << 10) | (1 << 11) | (2 << 12)
-        data = [flags, 0, 0, w, h]
+        data = [flags, 0, 0, w + il + ir, h + it + ib]
         geo = self.geometry(win)
         if geo:
             x, y = geo[0], geo[1]
             nx = min(max(x, ax + left), ax + aw - right - w)
             ny = min(max(y, ay + top), ay + ah - bottom - h)
             if (nx, ny) != (x, y):
-                data = [flags | (1 << 8) | (1 << 9) | 10, nx, ny, w, h]
+                data = [flags | (1 << 8) | (1 << 9) | 10, nx - il, ny - it, w + il + ir, h + it + ib]
         self.client_message(win, "_NET_MOVERESIZE_WINDOW", data)
         self.d.sync()
 
@@ -1536,6 +1563,7 @@ class Tracked:
         self.needs_full = True
         self.crc = None
         self.icon_sent = False
+        self.offset = (0, 0)
 
 
 class Agent:
@@ -1568,9 +1596,11 @@ class Agent:
             geo = self.x.geometry(win)
             if not geo or geo[2] <= 1 or geo[3] <= 1:
                 continue
+            min_w, min_h = self.x.min_size(win)
             found[wid] = {
                 "id": wid, "kind": "normal", "title": self.x.title(win), "app": self.x.app_id(win),
                 "x": geo[0], "y": geo[1], "w": geo[2], "h": geo[3], "parent": self.x.transient_for(win),
+                "minW": min_w, "minH": min_h,
             }
         for win, geo in self.x.popups():
             found[win.id] = {
@@ -1588,7 +1618,11 @@ class Agent:
                 tracked = self.windows[wid] = Tracked(info)
                 self.watch(wid, tracked)
                 self.ch.send(MSG_WINDOW, info)
-            elif tracked.info != info:
+            left, _, top, _ = self.x.insets(self.x.window(wid))
+            if tracked.offset != (left, top):
+                tracked.offset = (left, top)
+                tracked.needs_full = True
+            if tracked.info != info:
                 if (tracked.info["w"], tracked.info["h"]) != (info["w"], info["h"]):
                     tracked.needs_full = True
                 tracked.info = info
@@ -1629,7 +1663,8 @@ class Agent:
                 if tracked is None:
                     continue
                 a = ev.area
-                rect = (a.x, a.y, a.x + a.width, a.y + a.height)
+                left, top = tracked.offset
+                rect = (a.x - left, a.y - top, a.x - left + a.width, a.y - top + a.height)
                 if tracked.dirty is None:
                     tracked.dirty = rect
                 else:
@@ -1649,6 +1684,7 @@ class Agent:
                 return
             info = tracked.info
             w, h = info["w"], info["h"]
+            ox, oy = tracked.offset
 
             if tracked.damage is not None and not tracked.needs_full:
                 if tracked.dirty is None:
@@ -1661,7 +1697,7 @@ class Agent:
                 if x1 <= x0 or y1 <= y0:
                     continue
                 if (x1 - x0) * (y1 - y0) < FULL_FRAME_RATIO * w * h:
-                    pixels = self.x.capture(self.x.window(wid), x0, y0, x1 - x0, y1 - y0)
+                    pixels = self.x.capture(self.x.window(wid), x0 + ox, y0 + oy, x1 - x0, y1 - y0)
                     if pixels is not None:
                         header = struct.pack("<IIIIIIII", wid, w, h, x0, y0, x1 - x0, y1 - y0, (x1 - x0) * 4)
                         self.ch.send(MSG_FRAME_RECT, header + pixels)
@@ -1670,7 +1706,7 @@ class Agent:
             if tracked.damage is not None:
                 tracked.dirty = None
                 self.x.d.damage_subtract(tracked.damage)
-            pixels = self.x.capture(self.x.window(wid), 0, 0, w, h)
+            pixels = self.x.capture(self.x.window(wid), ox, oy, w, h)
             if pixels is None:
                 continue
             if tracked.damage is None:
