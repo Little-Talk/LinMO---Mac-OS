@@ -132,7 +132,7 @@ enum CloudInit {
 
         let reporter = Data(reporterScript.utf8).base64EncodedString()
         y += "bootcmd:\n"
-        y += "  - [sh, -c, \(q("mkdir -p /usr/local/libexec && echo \(reporter) | base64 -d > /usr/local/libexec/linmo-setup-reporter && chmod 755 /usr/local/libexec/linmo-setup-reporter && (systemd-run --no-block --unit=linmo-setup-reporter --collect -p DefaultDependencies=no python3 /usr/local/libexec/linmo-setup-reporter || true)"))]\n\n"
+        y += "  - [sh, -c, \(q("[ -e /var/lib/linmo/setup-rebooted ] || { mkdir -p /usr/local/libexec && echo \(reporter) | base64 -d > /usr/local/libexec/linmo-setup-reporter && chmod 755 /usr/local/libexec/linmo-setup-reporter && (systemd-run --no-block --unit=linmo-setup-reporter --collect -p DefaultDependencies=no python3 /usr/local/libexec/linmo-setup-reporter || true); }"))]\n\n"
 
         y += "users:\n"
         y += "  - name: \(q(o.username))\n"
@@ -258,11 +258,12 @@ enum CloudInit {
     import json, os, re, socket, subprocess, time
 
     DONE = "/var/lib/cloud/instance/boot-finished"
+    MARK = "/var/lib/linmo/setup-rebooted"
     RESULT = "/run/cloud-init/result.json"
     LOG = "/var/log/cloud-init-output.log"
     PORT = 5201
 
-    if os.path.exists(DONE):
+    if os.path.exists(MARK) or os.path.exists(DONE):
         raise SystemExit(0)
 
     apt_total = re.compile(r"(\d+) newly installed")
@@ -335,6 +336,11 @@ enum CloudInit {
     except Exception:
         pass
     time.sleep(20)
+    os.makedirs(os.path.dirname(MARK), exist_ok=True)
+    with open(MARK, "w") as f:
+        f.write("1\n")
+        f.flush()
+        os.fsync(f.fileno())
     subprocess.run(["systemctl", "reboot"])
 
     """#
