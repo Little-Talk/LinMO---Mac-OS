@@ -28,7 +28,7 @@ try:
 except ImportError:
     xfixes = None
 
-VERSION = 7
+VERSION = 8
 FEATURES = ["damage", "icons", "text", "drop", "scale", "shm", "dragout", "folders"]
 HOST_CID = 2
 PORT = int(os.environ.get("LINMO_AGENT_PORT", "5200"))

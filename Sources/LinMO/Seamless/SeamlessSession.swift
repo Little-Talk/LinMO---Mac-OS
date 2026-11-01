@@ -53,7 +53,7 @@ final class SeamlessSession: ObservableObject {
         var isWayland: Bool { port == SeamlessPorts.wayland }
     }
 
-    static let currentAgentVersion = 7
+    static let currentAgentVersion = 8
 
     @Published private(set) var isConnected = false
     @Published private(set) var hasX11Agent = false
