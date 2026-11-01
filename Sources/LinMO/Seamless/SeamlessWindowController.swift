@@ -199,6 +199,10 @@ final class SeamlessView: NSView, NSTextInputClient, NSDraggingSource {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     func show(_ image: CGImage, scale: CGFloat) {
+        if let layer {
+            let gravity: CALayerContentsGravity = layer.contentsAreFlipped() ? .bottomLeft : .topLeft
+            if layer.contentsGravity != gravity { layer.contentsGravity = gravity }
+        }
         layer?.contentsScale = scale
         layer?.contents = image
     }

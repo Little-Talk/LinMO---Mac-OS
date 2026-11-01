@@ -43,8 +43,8 @@ def check(name, ok):
 
 msgs = recv(lambda m: m[0] == 1)
 hello = next((m[1] for m in msgs if m[0] == 1), {})
-check("hello: version 6 + clipboard + clipboard-image + folders",
-      hello.get("version") == 6 and {"clipboard", "clipboard-image", "folders"} <= set(hello.get("features", [])))
+check("hello: version 7 + clipboard + clipboard-image + folders",
+      hello.get("version") == 7 and {"clipboard", "clipboard-image", "folders"} <= set(hello.get("features", [])))
 
 xenv = dict(os.environ, DISPLAY=":77")
 for text in ("copied in X11 ภาษาไทย", "second copy"):

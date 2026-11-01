@@ -28,7 +28,7 @@ try:
 except ImportError:
     xfixes = None
 
-VERSION = 6
+VERSION = 7
 FEATURES = ["damage", "icons", "text", "drop", "scale", "shm", "dragout", "folders"]
 HOST_CID = 2
 PORT = int(os.environ.get("LINMO_AGENT_PORT", "5200"))
@@ -544,11 +544,48 @@ class Desktop:
             self.client_message(win, "_NET_MOVERESIZE_WINDOW", [flags, nx, ny, 0, 0])
             self.d.sync()
 
-    def resize(self, wid, w, h):
+    def workarea(self):
         sw, sh = self.screen_size
-        w, h = max(1, min(int(w), sw)), max(1, min(int(h), sh))
+        value = self._prop(self.root, "_NET_WORKAREA", Xatom.CARDINAL)
+        if value is not None and len(value) >= 4 and value[2] > 0 and value[3] > 0:
+            return int(value[0]), int(value[1]), min(int(value[2]), sw), min(int(value[3]), sh)
+        return 0, 0, sw, sh
+
+    def frame_extents(self, win):
+        value = self._prop(win, "_NET_FRAME_EXTENTS", Xatom.CARDINAL)
+        if value is not None and len(value) >= 4:
+            return tuple(int(v) for v in value[:4])
+        return 0, 0, 0, 0
+
+    def unmaximize(self, win):
+        state = self._prop(win, "_NET_WM_STATE", Xatom.ATOM)
+        maximized = [self.atom("_NET_WM_STATE_MAXIMIZED_VERT"), self.atom("_NET_WM_STATE_MAXIMIZED_HORZ")]
+        fullscreen = self.atom("_NET_WM_STATE_FULLSCREEN")
+        if state is None:
+            return
+        if any(a in state for a in maximized):
+            self.client_message(win, "_NET_WM_STATE", [0, maximized[0], maximized[1], 2, 0])
+        if fullscreen in state:
+            self.client_message(win, "_NET_WM_STATE", [0, fullscreen, 0, 2, 0])
+
+    def resize(self, wid, w, h):
+        win = self.window(wid)
+        ax, ay, aw, ah = self.workarea()
+        left, right, top, bottom = self.frame_extents(win)
+        w = max(1, min(int(w), aw - left - right))
+        h = max(1, min(int(h), ah - top - bottom))
+        self.unmaximize(win)
         flags = (1 << 10) | (1 << 11) | (2 << 12)
-        self.client_message(self.window(wid), "_NET_MOVERESIZE_WINDOW", [flags, 0, 0, w, h])
+        data = [flags, 0, 0, w, h]
+        geo = self.geometry(win)
+        if geo:
+            x, y = geo[0], geo[1]
+            nx = min(max(x, ax + left), ax + aw - right - w)
+            ny = min(max(y, ay + top), ay + ah - bottom - h)
+            if (nx, ny) != (x, y):
+                data = [flags | (1 << 8) | (1 << 9) | 10, nx, ny, w, h]
+        self.client_message(win, "_NET_MOVERESIZE_WINDOW", data)
+        self.d.sync()
 
     def close(self, wid):
         self.client_message(self.window(wid), "_NET_CLOSE_WINDOW", [X.CurrentTime, 2, 0, 0, 0])
@@ -1514,7 +1551,7 @@ class Agent:
         self.activated = 0
 
     def start(self):
-        w, h = self.x.screen_size
+        _, _, w, h = self.x.workarea()
         features = FEATURES + (["clipboard", "clipboard-image"] if self.x.clipboard.available else [])
         self.ch.send(MSG_HELLO, {"version": VERSION, "features": features, "screen": [w, h],
                                  "session": os.environ.get("XDG_SESSION_TYPE", "x11")})
