@@ -47,7 +47,7 @@ final class SeamlessWindowController: NSObject, NSWindowDelegate {
             newWindow.tabbingMode = .disallowed
             let screen = session.guestScreen(for: info.id)
             newWindow.contentMaxSize = NSSize(width: screen.width / scale, height: screen.height / scale)
-            newWindow.contentMinSize = NSSize(width: 80, height: 40)
+            newWindow.contentMinSize = Self.minimumSize(for: info, scale: scale)
         }
         newWindow.isReleasedWhenClosed = false
         newWindow.acceptsMouseMovedEvents = true
@@ -91,12 +91,20 @@ final class SeamlessWindowController: NSObject, NSWindowDelegate {
             if (sizeChanged || moved), let frame = session?.anchoredFrame(for: info) {
                 window.setFrame(frame, display: true)
             }
-        } else if sizeChanged && !window.inLiveResize {
+        } else {
+            let minimum = Self.minimumSize(for: info, scale: scale)
+            if window.contentMinSize != minimum { window.contentMinSize = minimum }
+        }
+        if !info.isPopup && sizeChanged && !window.inLiveResize {
             let content = NSSize(width: CGFloat(info.w) / scale, height: CGFloat(info.h) / scale)
             var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: content))
             frame.origin = NSPoint(x: window.frame.minX, y: window.frame.maxY - frame.height)
             window.setFrame(frame, display: true)
         }
+    }
+
+    private static func minimumSize(for info: SeamlessSession.WindowInfo, scale: CGFloat) -> NSSize {
+        NSSize(width: max(80, CGFloat(info.minW ?? 0) / scale), height: max(40, CGFloat(info.minH ?? 0) / scale))
     }
 
     func show(_ image: CGImage) {
@@ -199,6 +207,10 @@ final class SeamlessView: NSView, NSTextInputClient, NSDraggingSource {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     func show(_ image: CGImage, scale: CGFloat) {
+        if let layer {
+            let gravity: CALayerContentsGravity = layer.contentsAreFlipped() ? .bottomLeft : .topLeft
+            if layer.contentsGravity != gravity { layer.contentsGravity = gravity }
+        }
         layer?.contentsScale = scale
         layer?.contents = image
     }

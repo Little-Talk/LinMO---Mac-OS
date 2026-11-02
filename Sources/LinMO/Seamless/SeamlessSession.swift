@@ -23,6 +23,8 @@ final class SeamlessSession: ObservableObject {
         let w: Int
         let h: Int
         let parent: UInt32
+        var minW: Int? = nil
+        var minH: Int? = nil
 
         var isPopup: Bool { kind == "popup" }
     }
@@ -51,7 +53,7 @@ final class SeamlessSession: ObservableObject {
         var isWayland: Bool { port == SeamlessPorts.wayland }
     }
 
-    static let currentAgentVersion = 6
+    static let currentAgentVersion = 8
 
     @Published private(set) var isConnected = false
     @Published private(set) var hasX11Agent = false
