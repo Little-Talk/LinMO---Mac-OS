@@ -16,6 +16,22 @@ final class MachineLibrary: ObservableObject {
         machines.contains { $0.isRunning }
     }
 
+    var canSuspendAllRunning: Bool {
+        machines.contains { $0.state == .running } && machines.allSatisfy { $0.state == .stopped || ($0.state == .running && $0.canSuspend) }
+    }
+
+    func suspendAll(completion: @escaping () -> Void) {
+        let running = machines.filter { $0.state == .running }
+        guard !running.isEmpty else { completion(); return }
+        var remaining = running.count
+        for machine in running {
+            machine.suspend {
+                remaining -= 1
+                if remaining == 0 { completion() }
+            }
+        }
+    }
+
     func load() {
         let fm = FileManager.default
         try? fm.createDirectory(at: MachineBundle.machinesDirectory, withIntermediateDirectories: true)

@@ -24,6 +24,15 @@ struct MachineBundle {
     var configURL: URL { url.appendingPathComponent("config.json") }
     var cloudInitSeedURL: URL { url.appendingPathComponent("CloudInit.iso") }
     var snapshotsURL: URL { url.appendingPathComponent("Snapshots", isDirectory: true) }
+    var savedStateURL: URL { url.appendingPathComponent("SavedState.vzvmsave") }
+
+    var hasSavedState: Bool {
+        FileManager.default.fileExists(atPath: savedStateURL.path)
+    }
+
+    func discardSavedState() {
+        try? FileManager.default.removeItem(at: savedStateURL)
+    }
 
 
     func loadConfig() throws -> MachineConfig {

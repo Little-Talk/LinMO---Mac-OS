@@ -9,6 +9,7 @@ struct MachineDetailView: View {
     @State private var showingSnapshots = false
     @State private var showingSettings = false
     @State private var confirmingDelete = false
+    @State private var confirmingDiscard = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,13 +29,18 @@ struct MachineDetailView: View {
         } message: {
             Text("ไฟล์ โปรแกรม และ snapshot ทั้งหมดของเครื่องนี้จะหายไปและกู้คืนไม่ได้")
         }
+        .confirmationDialog("ทิ้งสถานะที่พักไว้?", isPresented: $confirmingDiscard) {
+            Button("ทิ้งแล้วเปิดใหม่ครั้งหน้า", role: .destructive) { machine.discardSuspendedState() }
+        } message: {
+            Text("แอพและไฟล์ที่เปิดค้างไว้ใน Linux จะหายไป เหมือนถอดปลั๊กเครื่อง งานที่ยังไม่บันทึกจะหาย")
+        }
         .errorAlert($machine.errorMessage)
     }
 
 
     private var header: some View {
         HStack(spacing: 12) {
-            StatusBadge(state: machine.state)
+            StatusBadge(state: machine.state, suspended: machine.isSuspended)
 
             Spacer()
 
@@ -51,18 +57,26 @@ struct MachineDetailView: View {
                 } label: {
                     Label("Snapshot", systemImage: "clock.arrow.circlepath")
                 }
-                .help("บันทึกสถานะเครื่อง และย้อนกลับเมื่อทำพัง")
+                .help(machine.isSuspended ? "เครื่องพักอยู่ เปิดเครื่องแล้วปิดเครื่องก่อนจึงจะทำ snapshot ได้" : "บันทึกสถานะเครื่อง และย้อนกลับเมื่อทำพัง")
+                .disabled(machine.isSuspended)
 
                 Menu {
-                    Button("ตั้งค่าเครื่อง…") { showingSettings = true }
-                    Divider()
-                    Button(machine.config.sharedFolderPath == nil ? "แชร์โฟลเดอร์…" : "เปลี่ยนโฟลเดอร์แชร์…") {
-                        showingFolderPicker = true
-                    }
-                    if machine.config.sharedFolderPath != nil {
-                        Button("เลิกแชร์โฟลเดอร์") {
-                            machine.setSharedFolder(nil)
+                    Group {
+                        Button("ตั้งค่าเครื่อง…") { showingSettings = true }
+                        Divider()
+                        Button(machine.config.sharedFolderPath == nil ? "แชร์โฟลเดอร์…" : "เปลี่ยนโฟลเดอร์แชร์…") {
+                            showingFolderPicker = true
                         }
+                        if machine.config.sharedFolderPath != nil {
+                            Button("เลิกแชร์โฟลเดอร์") {
+                                machine.setSharedFolder(nil)
+                            }
+                        }
+                    }
+                    .disabled(machine.isSuspended)
+                    if machine.isSuspended {
+                        Divider()
+                        Button("ทิ้งสถานะที่พักไว้…") { confirmingDiscard = true }
                     }
                     Divider()
                     Button("แสดงไฟล์ของเครื่องใน Finder") {
@@ -84,15 +98,25 @@ struct MachineDetailView: View {
                 Button {
                     machine.start()
                 } label: {
-                    Label("เปิดเครื่อง", systemImage: "play.fill")
+                    Label(machine.isSuspended ? "เปิดต่อ" : "เปิดเครื่อง", systemImage: "play.fill")
                 }
                 .keyboardShortcut(.defaultAction)
+                .help(machine.isSuspended ? "กลับไปที่เดิมตอนพักเครื่องไว้" : "เปิดเครื่อง")
             }
 
             if machine.state == .running {
                 SeamlessToggle(session: machine.seamless)
                 FullScreenButton(session: machine.seamless)
                 WineInstallButton(rosettaEnabled: machine.config.rosettaEnabled)
+
+                if machine.canSuspend {
+                    Button {
+                        machine.suspend()
+                    } label: {
+                        Label("พักเครื่อง", systemImage: "pause.fill")
+                    }
+                    .help("เก็บทุกอย่างที่เปิดอยู่ไว้ แล้วกลับมาที่เดิมได้ในไม่กี่วินาที")
+                }
 
                 Button {
                     machine.requestShutdown()
