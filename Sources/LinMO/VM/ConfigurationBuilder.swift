@@ -87,6 +87,11 @@ enum ConfigurationBuilder {
         let output = VZVirtioSoundDeviceOutputStreamConfiguration()
         output.sink = VZHostAudioOutputStreamSink()
         sound.streams = [output]
+        if config.microphoneEnabled {
+            let input = VZVirtioSoundDeviceInputStreamConfiguration()
+            input.source = VZHostAudioInputStreamSource()
+            sound.streams.append(input)
+        }
         vz.audioDevices = [sound]
 
         vz.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]

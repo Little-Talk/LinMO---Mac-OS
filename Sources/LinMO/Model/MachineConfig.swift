@@ -17,6 +17,7 @@ struct MachineConfig: Codable, Equatable, Identifiable {
     var preferWayland: Bool = false
     var preset: Preset?
     var sshPort: Int?
+    var microphoneEnabled: Bool = false
     var sharedFolderBookmark: Data?
     var installerISOBookmark: Data?
     var createdAt: Date = Date()
@@ -43,6 +44,7 @@ struct MachineConfig: Codable, Equatable, Identifiable {
         preferWayland = try c.decodeIfPresent(Bool.self, forKey: .preferWayland) ?? false
         preset = try? c.decodeIfPresent(Preset.self, forKey: .preset)
         sshPort = try c.decodeIfPresent(Int.self, forKey: .sshPort)
+        microphoneEnabled = try c.decodeIfPresent(Bool.self, forKey: .microphoneEnabled) ?? false
         sharedFolderBookmark = try c.decodeIfPresent(Data.self, forKey: .sharedFolderBookmark)
         installerISOBookmark = try c.decodeIfPresent(Data.self, forKey: .installerISOBookmark)
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()

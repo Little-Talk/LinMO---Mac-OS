@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SwiftUI
 
 struct MachineDetailView: View {
@@ -198,6 +199,7 @@ struct MachineSettingsSheet: View {
     @State private var hiDPI = false
     @State private var macTextInput = true
     @State private var preferWayland = false
+    @State private var microphone = false
     @State private var installingRosetta = false
 
     private let maxCPU = ProcessInfo.processInfo.processorCount
@@ -221,6 +223,22 @@ struct MachineSettingsSheet: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                Toggle("ให้ Linux ใช้ไมโครโฟนของ Mac", isOn: $microphone)
+                    .onChange(of: microphone) {
+                        if microphone {
+                            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                                if !granted {
+                                    Task { @MainActor in
+                                        microphone = false
+                                        machine.errorMessage = "LinMO ยังไม่ได้รับสิทธิ์ใช้ไมโครโฟน เปิดได้ที่ System Settings → Privacy & Security → Microphone"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                Text("มีผลเมื่อเปิดเครื่องครั้งถัดไป")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Toggle("คมชัดสูงบนจอ Retina", isOn: $hiDPI)
                 Text("Linux ใช้ความละเอียดเท่าจอ Mac และขยายตัวหนังสือ 2 เท่า มีผลเมื่อเปิดเครื่องครั้งถัดไป")
                     .font(.caption)
@@ -248,7 +266,7 @@ struct MachineSettingsSheet: View {
             }
             .padding(16)
         }
-        .frame(width: 480, height: 620)
+        .frame(width: 480, height: 680)
         .onAppear {
             name = machine.config.name
             cpuCount = machine.config.cpuCount
@@ -258,6 +276,7 @@ struct MachineSettingsSheet: View {
             hiDPI = machine.config.hiDPI
             macTextInput = machine.config.macTextInput
             preferWayland = machine.config.preferWayland
+            microphone = machine.config.microphoneEnabled
         }
     }
 
@@ -281,6 +300,7 @@ struct MachineSettingsSheet: View {
                 $0.hiDPI = hiDPI
                 $0.macTextInput = macTextInput
                 $0.preferWayland = preferWayland
+                $0.microphoneEnabled = microphone
             }
             machine.growDisk(toGB: diskGB)
             dismiss()
@@ -314,6 +334,14 @@ struct PortsMenu: View {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(command, forType: .string)
                     }
+                }
+                if let command = forwarder.dockerSetupCommand {
+                    Divider()
+                    Button("คัดลอกคำสั่งใช้ Docker ของ Linux จาก Mac") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(command, forType: .string)
+                    }
+                    .help(command)
                 }
             } label: {
                 Label("พอร์ต", systemImage: "network")
