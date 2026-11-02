@@ -8,6 +8,7 @@ FILES = {
     "agent": "guest/linmo-agent.py",
     "install": "guest/install.sh",
     "installWine": "guest/install-wine.sh",
+    "ports": "guest/linmo-ports.py",
 }
 OUT = ROOT / "Sources/LinMO/Guest/GuestFiles.generated.swift"
 WAYLAND = ROOT / "guest/linmo-wayland"

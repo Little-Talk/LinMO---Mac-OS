@@ -23,6 +23,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     private var setupListener: SetupProgressListener?
     private var displayView: VZVirtualMachineView?
     let seamless: SeamlessSession
+    let ports = PortForwarder()
     private var restartAfterSetup = false
     private let fileAccess = SecurityScopedAccess()
     private var folderWatcher: SharedFolderWatcher?
@@ -99,6 +100,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             seamless.prefersMacTextInput = config.macTextInput
             seamless.prefersWayland = config.preferWayland
             seamless.attach(to: machine)
+            ports.attach(to: machine, sshPort: UInt16(clamping: assignSSHPort()))
             startFolderWatcher()
 
             if bundle.hasSavedState && canSuspend {
@@ -112,6 +114,15 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             fileAccess.endAll()
             errorMessage = "ตั้งค่าเครื่องไม่สำเร็จ: \(error.localizedDescription)"
         }
+    }
+
+    private func assignSSHPort() -> Int {
+        if let port = config.sshPort { return port }
+        let used = Set(MachineLibrary.shared.machines.compactMap { $0.config.sshPort })
+        var port = 2222
+        while used.contains(port) { port += 1 }
+        update { $0.sshPort = port }
+        return port
     }
 
     private func boot(_ machine: VZVirtualMachine) {
@@ -295,6 +306,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         folderWatcher = nil
         fileAccess.endAll()
         seamless.detach(from: virtualMachine)
+        ports.detach()
         setupListener?.detach(from: virtualMachine)
         setupListener = nil
         if setupStatus?.finished != true {

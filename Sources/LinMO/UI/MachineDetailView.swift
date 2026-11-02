@@ -108,6 +108,7 @@ struct MachineDetailView: View {
                 SeamlessToggle(session: machine.seamless)
                 FullScreenButton(session: machine.seamless)
                 WineInstallButton(rosettaEnabled: machine.config.rosettaEnabled)
+                PortsMenu(forwarder: machine.ports)
 
                 if machine.canSuspend {
                     Button {
@@ -283,6 +284,42 @@ struct MachineSettingsSheet: View {
             }
             machine.growDisk(toGB: diskGB)
             dismiss()
+        }
+    }
+}
+
+struct PortsMenu: View {
+    @ObservedObject var forwarder: PortForwarder
+
+    var body: some View {
+        if forwarder.isAvailable {
+            Menu {
+                let web = forwarder.forwarded.filter { $0.guest != 22 }
+                if web.isEmpty {
+                    Text("ยังไม่มีโปรแกรมใน Linux เปิดพอร์ตรอรับการเชื่อมต่อ")
+                } else {
+                    Section("เปิดใน browser ของ Mac") {
+                        ForEach(web) { port in
+                            Button("localhost:\(String(port.mac))") {
+                                if let url = URL(string: "http://localhost:\(port.mac)") {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+                        }
+                    }
+                }
+                if let command = forwarder.sshCommand {
+                    Divider()
+                    Button("คัดลอกคำสั่ง SSH: \(command)") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(command, forType: .string)
+                    }
+                }
+            } label: {
+                Label("พอร์ต", systemImage: "network")
+            }
+            .fixedSize()
+            .help("โปรแกรมที่เปิดพอร์ตใน Linux ใช้จาก Mac ได้ที่ localhost พอร์ตเดียวกัน")
         }
     }
 }

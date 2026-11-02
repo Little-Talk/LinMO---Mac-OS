@@ -125,6 +125,39 @@ else
     echo "  ยังไม่พบ Rosetta — เปิด Rosetta ในการตั้งค่าเครื่องบน Mac แล้วรีสตาร์ทเครื่อง จากนั้นรันคำสั่งติดตั้งนี้อีกครั้ง"
 fi
 
+echo "▶ ตั้งค่าส่งต่อพอร์ตและ SSH มาที่ Mac…"
+install -m 0755 "$DIR/linmo-ports.py" /usr/local/lib/linmo/linmo-ports.py
+if command -v apt-get >/dev/null 2>&1; then
+    apt-get install -y -qq openssh-server >/dev/null 2>&1 || true
+elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y -q openssh-server >/dev/null 2>&1 || true
+elif command -v pacman >/dev/null 2>&1; then
+    pacman -S --noconfirm --needed openssh >/dev/null 2>&1 || true
+fi
+if [ -d /etc/ssh/sshd_config.d ]; then
+    printf 'PasswordAuthentication yes\nKbdInteractiveAuthentication yes\n' > /etc/ssh/sshd_config.d/10-linmo.conf
+fi
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable --now ssh >/dev/null 2>&1 || systemctl enable --now sshd >/dev/null 2>&1 || true
+    systemctl reload ssh >/dev/null 2>&1 || systemctl reload sshd >/dev/null 2>&1 || true
+    cat > /etc/systemd/system/linmo-ports.service <<'UNIT'
+[Unit]
+Description=LinMO: forward Linux ports to localhost on the Mac
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/lib/linmo/linmo-ports.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    systemctl daemon-reload || true
+    systemctl enable linmo-ports.service >/dev/null 2>&1 || true
+    systemctl restart linmo-ports.service >/dev/null 2>&1 || true
+fi
+
 echo "▶ ตั้งให้อัปเดต LinMO Tools เองทุกครั้งที่เปิดเครื่อง…"
 cat > /usr/local/sbin/linmo-tools-update.new <<'UPDATER'
 #!/bin/sh
