@@ -39,6 +39,8 @@
 	<string>public.app-category.developer-tools</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ให้โปรแกรมใน Linux ใช้ไมโครโฟนของ Mac ได้ เช่น ประชุมออนไลน์หรืออัดเสียง</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSPrincipalClass</key>

@@ -318,6 +318,9 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
 
         if restartAfterSetup {
             restartAfterSetup = false
+            if setupStatus?.errors == 0, snapshots.isEmpty, (try? bundle.createSnapshot(named: "หลังติดตั้งเสร็จ")) != nil {
+                reloadSnapshots()
+            }
             start()
         }
     }
