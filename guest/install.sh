@@ -125,6 +125,61 @@ else
     echo "  ยังไม่พบ Rosetta — เปิด Rosetta ในการตั้งค่าเครื่องบน Mac แล้วรีสตาร์ทเครื่อง จากนั้นรันคำสั่งติดตั้งนี้อีกครั้ง"
 fi
 
+echo "▶ ตั้งให้อัปเดต LinMO Tools เองทุกครั้งที่เปิดเครื่อง…"
+cat > /usr/local/sbin/linmo-tools-update.new <<'UPDATER'
+#!/bin/sh
+MNT=/run/linmo-tools-update
+mkdir -p "$MNT"
+found=0
+for d in /dev/vd? /dev/sr?; do
+    [ -b "$d" ] || continue
+    mount -o ro "$d" "$MNT" 2>/dev/null || continue
+    if [ -e "$MNT/install.sh" ] && [ -e "$MNT/version.txt" ]; then
+        found=1
+        break
+    fi
+    umount "$MNT"
+done
+[ "$found" = 1 ] || exit 0
+new="$(cat "$MNT/version.txt")"
+old="$(cat /usr/local/lib/linmo/tools-version 2>/dev/null || true)"
+status=0
+if [ -n "$new" ] && [ "$new" != "$old" ]; then
+    echo "LinMO Tools $old -> $new"
+    LINMO_AUTO_UPDATE=1 sh "$MNT/install.sh" || status=$?
+fi
+umount "$MNT" 2>/dev/null || true
+exit "$status"
+UPDATER
+chmod 0755 /usr/local/sbin/linmo-tools-update.new
+mv -f /usr/local/sbin/linmo-tools-update.new /usr/local/sbin/linmo-tools-update
+if command -v systemctl >/dev/null 2>&1; then
+    cat > /etc/systemd/system/linmo-tools-update.service <<'UNIT'
+[Unit]
+Description=LinMO: update LinMO Tools from the attached tools disk
+Wants=network-online.target
+After=network-online.target local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/linmo-tools-update
+TimeoutStartSec=20min
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    systemctl daemon-reload || true
+    systemctl enable linmo-tools-update.service >/dev/null 2>&1 || true
+fi
+if [ -f "$DIR/version.txt" ]; then
+    install -m 0644 "$DIR/version.txt" /usr/local/lib/linmo/tools-version
+fi
+
+if [ "${LINMO_AUTO_UPDATE:-}" = 1 ]; then
+    echo "✅ อัปเดต LinMO Tools แล้ว"
+    exit 0
+fi
+
 echo "✅ ติดตั้งเสร็จแล้ว — ออกจากระบบแล้วเข้าใหม่ (หรือรีสตาร์ทเครื่อง) เพื่อเริ่มใช้งาน"
 if [ "${XDG_SESSION_TYPE:-}" = "wayland" ] && [ "$WAYLAND_OK" != 1 ]; then
     echo "⚠️  ตอนนี้ใช้ Wayland อยู่ — ถ้าไม่มี linmo-wayland โหมดหน้าต่างแยกต้องใช้เซสชัน X11 (Xorg)"

@@ -28,7 +28,7 @@ try:
 except ImportError:
     xfixes = None
 
-VERSION = 8
+VERSION = 9
 FEATURES = ["damage", "icons", "text", "drop", "scale", "shm", "dragout", "folders"]
 HOST_CID = 2
 PORT = int(os.environ.get("LINMO_AGENT_PORT", "5200"))
@@ -1829,6 +1829,8 @@ class Agent:
                 log("folder refresh failed:", exc)
             if now - self.last_scan >= SCAN_INTERVAL:
                 self.last_scan = now
+                if agent_replaced():
+                    raise Restart()
                 self.scan()
                 self.drain_x_events()
             if self.streaming and now - self.last_frame >= FRAME_INTERVAL:
@@ -1844,6 +1846,34 @@ class Agent:
             pass
 
 
+class Restart(Exception):
+    pass
+
+
+AGENT_PATH = os.path.abspath(__file__)
+
+
+def agent_stamp():
+    try:
+        st = os.stat(AGENT_PATH)
+        return (st.st_ino, st.st_mtime_ns)
+    except OSError:
+        return None
+
+
+STARTED_STAMP = agent_stamp()
+
+
+def agent_replaced():
+    stamp = agent_stamp()
+    return stamp is not None and stamp != STARTED_STAMP
+
+
+def restart_agent():
+    log("agent was updated, restarting")
+    os.execv(sys.executable, [sys.executable, AGENT_PATH] + sys.argv[1:])
+
+
 def main():
     try:
         desktop = Desktop()
@@ -1854,19 +1884,26 @@ def main():
         "damage" if desktop.damage_event else "no-damage")
     folders = FolderSync()
     while True:
+        if agent_replaced():
+            restart_agent()
         channel = connect()
         if channel is None:
             time.sleep(2)
             continue
         log("connected to LinMO")
         agent = Agent(desktop, channel, folders)
+        replaced = False
         try:
             agent.run()
+        except Restart:
+            replaced = True
         except (EOFError, OSError) as exc:
             log("disconnected:", exc)
         finally:
             agent.stop()
             channel.close()
+        if replaced:
+            restart_agent()
         time.sleep(1)
 
 

@@ -69,7 +69,7 @@ struct AgentInstallHelp: View {
                 }
                 Spacer()
             }
-            Text("ติดตั้งเสร็จแล้วให้ออกจากระบบแล้วเข้าใหม่ใน Linux ต้องใช้หน้าจอแบบ X11 (XFCE หรือ GNOME on Xorg)")
+            Text("ติดตั้งเสร็จแล้วให้ออกจากระบบแล้วเข้าใหม่ใน Linux ต้องใช้หน้าจอแบบ X11 (XFCE หรือ GNOME on Xorg) ทำแค่ครั้งเดียว ต่อจากนี้เมื่อ LinMO มีรุ่นใหม่ แค่ปิดแล้วเปิดเครื่อง Linux ใหม่ agent จะอัปเดตเอง")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
