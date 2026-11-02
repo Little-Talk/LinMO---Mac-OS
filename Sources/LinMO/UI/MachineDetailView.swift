@@ -78,6 +78,9 @@ struct MachineDetailView: View {
                             }
                         }
                         Button("โฟลเดอร์แชร์เพิ่มเติม…") { showingExtraFolders = true }
+                        Divider()
+                        Button("ทำสำเนาเครื่อง") { library.duplicate(machine) }
+                            .help("สร้างเครื่องใหม่ที่มีทุกอย่างเหมือนเครื่องนี้ ใช้พื้นที่เพิ่มเฉพาะส่วนที่ต่างกัน")
                     }
                     .disabled(machine.isSuspended)
                     if machine.isSuspended {

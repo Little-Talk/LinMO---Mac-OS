@@ -54,6 +54,25 @@ final class MachineLibrary: ObservableObject {
         machines.append(controller)
     }
 
+    @discardableResult
+    func duplicate(_ controller: MachineController) -> MachineController? {
+        guard controller.state == .stopped, !controller.isSuspended else { return nil }
+        var config = controller.config
+        config.id = UUID()
+        config.name = controller.config.name + " (สำเนา)"
+        config.createdAt = Date()
+        config.sshPort = nil
+        do {
+            let bundle = try controller.bundle.clone(as: config)
+            let copy = MachineController(bundle: bundle, config: config)
+            machines.append(copy)
+            return copy
+        } catch {
+            errorMessage = "ทำสำเนาเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
     func delete(_ controller: MachineController) {
         guard !controller.isRunning else { return }
         do {

@@ -95,6 +95,23 @@ struct MachineBundle {
         }
     }
 
+    func clone(as config: MachineConfig) throws -> MachineBundle {
+        let fm = FileManager.default
+        let target = MachineBundle(url: Self.url(for: config.id))
+        try fm.createDirectory(at: target.url, withIntermediateDirectories: true)
+        do {
+            for source in [diskURL, nvramURL, macAddressURL, cloudInitSeedURL] where fm.fileExists(atPath: source.path) {
+                try fm.copyItem(at: source, to: target.url.appendingPathComponent(source.lastPathComponent))
+            }
+            try VZGenericMachineIdentifier().dataRepresentation.write(to: target.machineIdentifierURL)
+            try target.save(config)
+        } catch {
+            try? fm.removeItem(at: target.url)
+            throw error
+        }
+        return target
+    }
+
     func delete() throws {
         try FileManager.default.removeItem(at: url)
     }

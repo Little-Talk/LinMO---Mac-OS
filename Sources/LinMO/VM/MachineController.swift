@@ -84,6 +84,11 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
 
     func start() {
         guard state == .stopped else { return }
+        let mac = bundle.macAddress().string
+        if let twin = MachineLibrary.shared.machines.first(where: { $0 !== self && $0.isRunning && $0.bundle.macAddress().string == mac }) {
+            errorMessage = "\"\(twin.config.name)\" เป็นต้นฉบับหรือสำเนาของเครื่องนี้และเปิดอยู่ ปิดเครื่องนั้นก่อน เพราะสองเครื่องใช้การ์ดเครือข่ายเดียวกันจะต่ออินเทอร์เน็ตชนกัน"
+            return
+        }
         do {
             try openUserSelectedFiles()
             let configuration = try ConfigurationBuilder.make(bundle: bundle, config: config)
