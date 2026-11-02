@@ -9,6 +9,7 @@ struct MachineDetailView: View {
     @State private var showingFolderPicker = false
     @State private var showingSnapshots = false
     @State private var showingSettings = false
+    @State private var showingExtraFolders = false
     @State private var confirmingDelete = false
     @State private var confirmingDiscard = false
 
@@ -24,6 +25,9 @@ struct MachineDetailView: View {
         }
         .sheet(isPresented: $showingSettings) {
             MachineSettingsSheet(machine: machine)
+        }
+        .sheet(isPresented: $showingExtraFolders) {
+            ExtraFoldersSheet(machine: machine)
         }
         .confirmationDialog("ลบ \"\(machine.config.name)\" ทิ้ง?", isPresented: $confirmingDelete) {
             Button("ลบถาวร", role: .destructive) { library.delete(machine) }
@@ -73,6 +77,7 @@ struct MachineDetailView: View {
                                 machine.setSharedFolder(nil)
                             }
                         }
+                        Button("โฟลเดอร์แชร์เพิ่มเติม…") { showingExtraFolders = true }
                     }
                     .disabled(machine.isSuspended)
                     if machine.isSuspended {
@@ -163,6 +168,9 @@ struct MachineDetailView: View {
                     infoRow("ดิสก์", "\(machine.config.diskGB) GB")
                     if let folder = machine.config.sharedFolderPath {
                         infoRow("โฟลเดอร์แชร์", folder)
+                    }
+                    if !machine.config.extraFolders.isEmpty {
+                        infoRow("แชร์เพิ่มเติม", machine.config.extraFolders.map(\.name).joined(separator: ", "))
                     }
                     if machine.config.rosettaEnabled {
                         infoRow("Rosetta", "เปิดใช้")
@@ -348,6 +356,68 @@ struct PortsMenu: View {
             }
             .fixedSize()
             .help("โปรแกรมที่เปิดพอร์ตใน Linux ใช้จาก Mac ได้ที่ localhost พอร์ตเดียวกัน")
+        }
+    }
+}
+
+struct ExtraFoldersSheet: View {
+    @ObservedObject var machine: MachineController
+    @Environment(\.dismiss) private var dismiss
+    @State private var picking = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("โฟลเดอร์แชร์เพิ่มเติม")
+                .font(.headline)
+            Text("แต่ละโฟลเดอร์จะอยู่ที่ ~/MacFolders/ชื่อโฟลเดอร์ ใน Linux มีผลเมื่อเปิดเครื่องครั้งถัดไป เครื่องที่สร้างไว้ก่อนต้องอัปเดต LinMO Tools ก่อน")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            List {
+                if machine.config.extraFolders.isEmpty {
+                    Text("ยังไม่มีโฟลเดอร์")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(machine.config.extraFolders) { folder in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(folder.name)
+                            Text(folder.path)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer()
+                        Toggle("อ่านอย่างเดียว", isOn: Binding(
+                            get: { folder.readOnly },
+                            set: { machine.setExtraFolder(folder.id, readOnly: $0) }
+                        ))
+                        .toggleStyle(.checkbox)
+                        Button {
+                            machine.removeExtraFolder(folder.id)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("เลิกแชร์โฟลเดอร์นี้")
+                    }
+                }
+            }
+            .frame(minHeight: 160)
+            HStack {
+                Button("เพิ่มโฟลเดอร์…") { picking = true }
+                Spacer()
+                Button("เสร็จ") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
+        .frame(width: 480)
+        .fileImporter(isPresented: $picking, allowedContentTypes: [.folder], allowsMultipleSelection: true) { result in
+            if case .success(let urls) = result {
+                urls.forEach { machine.addExtraFolder($0) }
+            }
         }
     }
 }

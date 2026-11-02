@@ -28,7 +28,7 @@ try:
 except ImportError:
     xfixes = None
 
-VERSION = 9
+VERSION = 10
 FEATURES = ["damage", "icons", "text", "drop", "scale", "shm", "dragout", "folders"]
 HOST_CID = 2
 PORT = int(os.environ.get("LINMO_AGENT_PORT", "5200"))
@@ -1263,7 +1263,8 @@ class FolderSync:
     RESCAN_INTERVAL = 20.0
     MAX_CHILDREN = 512
 
-    def __init__(self):
+    def __init__(self, tag="linmo"):
+        self.TAG = tag
         self.root = None
         self.dev = None
         self.watches = {}
@@ -1784,7 +1785,7 @@ class Agent:
                     pass
             self.x.clipboard.set_from_mac(text if isinstance(text, str) and text else None, png)
         elif kind == MSG_FOLDER_CHANGED:
-            self.folders.changed(msg.get("paths"))
+            self.folders.changed(msg.get("paths"), msg.get("tag"))
         elif kind == MSG_CONFIG:
             if "scale" in msg:
                 apply_scale(float(msg["scale"]))
@@ -1809,12 +1810,14 @@ class Agent:
                            self.last_frame + FRAME_INTERVAL if self.streaming else float("inf"),
                            self.folders.deadline())
             wait_w = [self.ch] if self.ch.outbox else []
-            wait_r = [self.ch, x_fd] + ([self.folders] if self.folders.fd >= 0 else [])
+            folder_readers = self.folders.readers()
+            wait_r = [self.ch, x_fd] + folder_readers
             readable, writable, _ = select.select(wait_r, wait_w, [], max(0.0, deadline - now))
             if writable:
                 self.ch.flush()
-            if self.folders in readable:
-                self.folders.read_local()
+            for sync in folder_readers:
+                if sync in readable:
+                    sync.read_local()
             if self.ch in readable:
                 for kind, msg in self.ch.receive():
                     try:
@@ -1844,6 +1847,30 @@ class Agent:
             self.x.keyboard.restore()
         except error.XError:
             pass
+
+
+class FolderGroup:
+    def __init__(self, syncs):
+        self.syncs = syncs
+
+    def readers(self):
+        return [sync for sync in self.syncs if sync.fd >= 0]
+
+    def changed(self, paths, tag=None):
+        tag = tag or FolderSync.TAG
+        for sync in self.syncs:
+            if sync.TAG == tag:
+                sync.changed(paths)
+
+    def deadline(self):
+        return min(sync.deadline() for sync in self.syncs)
+
+    def tick(self, now):
+        for sync in self.syncs:
+            try:
+                sync.tick(now)
+            except OSError as exc:
+                log("folder refresh failed:", exc)
 
 
 class Restart(Exception):
@@ -1882,7 +1909,7 @@ def main():
         return 1
     log("started on", os.environ.get("DISPLAY"), "screen", desktop.screen_size,
         "damage" if desktop.damage_event else "no-damage")
-    folders = FolderSync()
+    folders = FolderGroup([FolderSync("linmo"), FolderSync("linmo-extra")])
     while True:
         if agent_replaced():
             restart_agent()

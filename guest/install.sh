@@ -125,6 +125,19 @@ else
     echo "  ยังไม่พบ Rosetta — เปิด Rosetta ในการตั้งค่าเครื่องบน Mac แล้วรีสตาร์ทเครื่อง จากนั้นรันคำสั่งติดตั้งนี้อีกครั้ง"
 fi
 
+echo "▶ ตั้งค่าโฟลเดอร์แชร์เพิ่มเติม…"
+mkdir -p /mnt/linmo-extra
+grep -q '^linmo-extra ' /etc/fstab || echo 'linmo-extra /mnt/linmo-extra virtiofs rw,nofail 0 0' >> /etc/fstab
+mountpoint -q /mnt/linmo-extra || mount /mnt/linmo-extra 2>/dev/null || true
+MAIN_USER="$(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 { print $1; exit }')"
+if [ -n "$MAIN_USER" ]; then
+    MAIN_HOME="$(getent passwd "$MAIN_USER" | cut -d: -f6)"
+    if [ -d "$MAIN_HOME" ] && [ ! -e "$MAIN_HOME/MacFolders" ] && [ ! -L "$MAIN_HOME/MacFolders" ]; then
+        ln -s /mnt/linmo-extra "$MAIN_HOME/MacFolders"
+        chown -h "$MAIN_USER:" "$MAIN_HOME/MacFolders" 2>/dev/null || true
+    fi
+fi
+
 echo "▶ ตั้งค่าส่งต่อพอร์ตและ SSH มาที่ Mac…"
 install -m 0755 "$DIR/linmo-ports.py" /usr/local/lib/linmo/linmo-ports.py
 if command -v apt-get >/dev/null 2>&1; then

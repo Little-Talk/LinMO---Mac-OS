@@ -27,6 +27,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     private var restartAfterSetup = false
     private let fileAccess = SecurityScopedAccess()
     private var folderWatcher: SharedFolderWatcher?
+    private var extraWatchers: [SharedFolderWatcher] = []
 
     init(bundle: MachineBundle, config: MachineConfig) {
         self.bundle = bundle
@@ -227,6 +228,18 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         } else if AppEnvironment.isSandboxed && config.sharedFolderPath != nil {
             throw LinMOError.message("ต้องเลือกโฟลเดอร์แชร์ใหม่อีกครั้งเพื่อให้สิทธิ์ LinMO (เมนู ••• → เปลี่ยนโฟลเดอร์แชร์) หรือเลิกแชร์โฟลเดอร์")
         }
+        var refreshed = config.extraFolders
+        for index in refreshed.indices {
+            guard let data = refreshed[index].bookmark, let resolved = SecurityScopedBookmark.resolve(data) else { continue }
+            fileAccess.begin(resolved.url)
+            refreshed[index].path = resolved.url.path
+            if resolved.isStale, let fresh = SecurityScopedBookmark.make(for: resolved.url) {
+                refreshed[index].bookmark = fresh
+            }
+        }
+        if refreshed != config.extraFolders {
+            update { $0.extraFolders = refreshed }
+        }
         if let data = config.installerISOBookmark, let resolved = SecurityScopedBookmark.resolve(data) {
             fileAccess.begin(resolved.url)
             if resolved.url.path != config.installerISOPath || resolved.isStale {
@@ -242,6 +255,35 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             SharedFolderWatcher(path: path) { [weak self] paths in
                 Task { @MainActor in self?.seamless.notifyFolderChanges(paths) }
             }
+        }
+        extraWatchers.forEach { $0.stop() }
+        extraWatchers = config.extraFolders.compactMap { folder in
+            let name = folder.name
+            return SharedFolderWatcher(path: folder.path) { [weak self] paths in
+                let prefixed = paths.map { "\(name)/\($0)" }
+                Task { @MainActor in self?.seamless.notifyFolderChanges(prefixed, tag: SharedTags.extraFolders) }
+            }
+        }
+    }
+
+    func addExtraFolder(_ url: URL) {
+        update {
+            guard !$0.extraFolders.contains(where: { $0.path == url.path }) else { return }
+            let folder = ExtraFolder(name: ExtraFolder.uniqueName(for: url, existing: $0.extraFolders),
+                                     path: url.path,
+                                     bookmark: SecurityScopedBookmark.make(for: url))
+            $0.extraFolders.append(folder)
+        }
+    }
+
+    func removeExtraFolder(_ id: UUID) {
+        update { $0.extraFolders.removeAll { $0.id == id } }
+    }
+
+    func setExtraFolder(_ id: UUID, readOnly: Bool) {
+        update {
+            guard let index = $0.extraFolders.firstIndex(where: { $0.id == id }) else { return }
+            $0.extraFolders[index].readOnly = readOnly
         }
     }
 
@@ -304,6 +346,8 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     fileprivate func didStop() {
         folderWatcher?.stop()
         folderWatcher = nil
+        extraWatchers.forEach { $0.stop() }
+        extraWatchers = []
         fileAccess.endAll()
         seamless.detach(from: virtualMachine)
         ports.detach()

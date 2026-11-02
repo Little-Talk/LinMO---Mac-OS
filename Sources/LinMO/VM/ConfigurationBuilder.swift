@@ -5,6 +5,7 @@ import Virtualization
 enum SharedTags {
     static let folder = "linmo"
     static let rosetta = "rosetta"
+    static let extraFolders = "linmo-extra"
 }
 
 enum ConfigurationBuilder {
@@ -113,6 +114,17 @@ enum ConfigurationBuilder {
                 directory: VZSharedDirectory(url: URL(fileURLWithPath: folderPath, isDirectory: true), readOnly: false)
             )
             directoryShares.append(share)
+        }
+        if !config.extraFolders.isEmpty {
+            var directories: [String: VZSharedDirectory] = [:]
+            for folder in config.extraFolders where FileManager.default.fileExists(atPath: folder.path) {
+                directories[folder.name] = VZSharedDirectory(url: URL(fileURLWithPath: folder.path, isDirectory: true), readOnly: folder.readOnly)
+            }
+            if !directories.isEmpty {
+                let share = VZVirtioFileSystemDeviceConfiguration(tag: SharedTags.extraFolders)
+                share.share = VZMultipleDirectoryShare(directories: directories)
+                directoryShares.append(share)
+            }
         }
         if config.rosettaEnabled, RosettaSupport.availability == .installed {
             let share = VZVirtioFileSystemDeviceConfiguration(tag: SharedTags.rosetta)

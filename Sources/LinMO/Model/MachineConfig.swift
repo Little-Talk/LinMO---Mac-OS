@@ -18,6 +18,7 @@ struct MachineConfig: Codable, Equatable, Identifiable {
     var preset: Preset?
     var sshPort: Int?
     var microphoneEnabled: Bool = false
+    var extraFolders: [ExtraFolder] = []
     var sharedFolderBookmark: Data?
     var installerISOBookmark: Data?
     var createdAt: Date = Date()
@@ -45,9 +46,30 @@ struct MachineConfig: Codable, Equatable, Identifiable {
         preset = try? c.decodeIfPresent(Preset.self, forKey: .preset)
         sshPort = try c.decodeIfPresent(Int.self, forKey: .sshPort)
         microphoneEnabled = try c.decodeIfPresent(Bool.self, forKey: .microphoneEnabled) ?? false
+        extraFolders = (try? c.decodeIfPresent([ExtraFolder].self, forKey: .extraFolders)) ?? []
         sharedFolderBookmark = try c.decodeIfPresent(Data.self, forKey: .sharedFolderBookmark)
         installerISOBookmark = try c.decodeIfPresent(Data.self, forKey: .installerISOBookmark)
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+    }
+}
+
+struct ExtraFolder: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var name: String
+    var path: String
+    var bookmark: Data?
+    var readOnly: Bool = false
+
+    static func uniqueName(for url: URL, existing: [ExtraFolder]) -> String {
+        let base = url.lastPathComponent.replacingOccurrences(of: "/", with: "-")
+        let taken = Set(existing.map(\.name))
+        var name = base.isEmpty ? "Folder" : base
+        var index = 2
+        while taken.contains(name) {
+            name = "\(base) \(index)"
+            index += 1
+        }
+        return name
     }
 }
 
