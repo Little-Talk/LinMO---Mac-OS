@@ -100,7 +100,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             seamless.prefersMacTextInput = config.macTextInput
             seamless.prefersWayland = config.preferWayland
             seamless.attach(to: machine)
-            ports.attach(to: machine, sshPort: UInt16(clamping: assignSSHPort()))
+            ports.attach(to: machine, sshPort: UInt16(clamping: assignSSHPort()), name: config.name)
             startFolderWatcher()
 
             if bundle.hasSavedState && canSuspend {

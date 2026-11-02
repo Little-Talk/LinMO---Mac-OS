@@ -8,6 +8,7 @@ import sys
 import threading
 
 PORT = int(os.environ.get("LINMO_PORTS_PORT", "5300"))
+DOCKER = os.environ.get("LINMO_DOCKER_SOCKET", "/var/run/docker.sock")
 SKIP = {25, 53, 111, 631, 5353}
 LOCAL = {
     "/proc/net/tcp": {"00000000", "0100007F"},
@@ -62,6 +63,15 @@ def open_target(port):
     return None
 
 
+def open_docker():
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(DOCKER)
+        return sock
+    except OSError:
+        return None
+
+
 def copy(src, dst):
     try:
         while True:
@@ -81,11 +91,11 @@ def handle(conn):
     try:
         op = recv_exact(conn, 1)
         if op == b"L":
-            conn.sendall(json.dumps({"ports": listening(), "user": main_user()}).encode())
+            conn.sendall(json.dumps({"ports": listening(), "user": main_user(),
+                                     "docker": os.path.exists(DOCKER)}).encode())
             return
-        if op == b"C":
-            port = struct.unpack(">H", recv_exact(conn, 2))[0]
-            target = open_target(port)
+        if op in (b"C", b"D"):
+            target = open_docker() if op == b"D" else open_target(struct.unpack(">H", recv_exact(conn, 2))[0])
             if target is None:
                 return
             target.settimeout(None)

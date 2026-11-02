@@ -335,6 +335,14 @@ struct PortsMenu: View {
                         NSPasteboard.general.setString(command, forType: .string)
                     }
                 }
+                if let command = forwarder.dockerSetupCommand {
+                    Divider()
+                    Button("คัดลอกคำสั่งใช้ Docker ของ Linux จาก Mac") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(command, forType: .string)
+                    }
+                    .help(command)
+                }
             } label: {
                 Label("พอร์ต", systemImage: "network")
             }

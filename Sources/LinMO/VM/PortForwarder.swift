@@ -15,11 +15,14 @@ final class PortForwarder: ObservableObject {
     @Published private(set) var forwarded: [ForwardedPort] = []
     @Published private(set) var guestUser: String?
     @Published private(set) var isAvailable = false
+    @Published private(set) var dockerSocketPath: String?
 
     private(set) var sshPort: UInt16 = 2222
     private weak var device: VZVirtioSocketDevice?
     private var timer: Timer?
     private var listeners: [UInt16: Listener] = [:]
+    private var dockerListener: Listener?
+    private var dockerName = "linmo"
     private var polling = false
 
     init() {
@@ -36,11 +39,20 @@ final class PortForwarder: ObservableObject {
         return "ssh -p \(ssh.mac) \(user)localhost"
     }
 
-    func attach(to machine: VZVirtualMachine, sshPort: UInt16) {
+    var dockerContextName: String { "linmo-\(dockerName)" }
+
+    var dockerSetupCommand: String? {
+        guard let path = dockerSocketPath else { return nil }
+        return "docker context create \(dockerContextName) --docker host=unix://\(path) 2>/dev/null; docker context use \(dockerContextName)"
+    }
+
+    func attach(to machine: VZVirtualMachine, sshPort: UInt16, name: String) {
         detach()
         guard let socket = machine.socketDevices.first as? VZVirtioSocketDevice else { return }
         device = socket
         self.sshPort = sshPort
+        let slug = name.lowercased().unicodeScalars.map { CharacterSet.alphanumerics.contains($0) && $0.isASCII ? String($0) : "-" }.joined()
+        dockerName = slug.trimmingCharacters(in: CharacterSet(charactersIn: "-")).isEmpty ? "vm\(sshPort)" : slug
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.poll() }
         }
@@ -51,6 +63,7 @@ final class PortForwarder: ObservableObject {
         timer = nil
         listeners.values.forEach { $0.close() }
         listeners.removeAll()
+        closeDocker()
         forwarded = []
         guestUser = nil
         isAvailable = false
@@ -107,6 +120,7 @@ final class PortForwarder: ObservableObject {
             isAvailable = false
             listeners.values.forEach { $0.close() }
             listeners.removeAll()
+            closeDocker()
             forwarded = []
             return
         }
@@ -120,15 +134,43 @@ final class PortForwarder: ObservableObject {
         }
         for guest in wanted where listeners[guest] == nil {
             let mac = guest == 22 ? sshPort : guest
-            if let listener = Listener(macPort: mac, guestPort: guest, connect: { [weak self] completion in
-                self?.openGuest(completion)
-            }) {
-                listeners[guest] = listener
-            }
+            guard let v4 = Listener.bindTCP(port: mac, ipv6: false) else { continue }
+            let fds = [v4] + [Listener.bindTCP(port: mac, ipv6: true)].compactMap { $0 }
+            listeners[guest] = Listener(fds: fds, header: [UInt8(ascii: "C"), UInt8(guest >> 8), UInt8(guest & 0xff)],
+                                        connect: { [weak self] completion in self?.openGuest(completion) })
         }
-        forwarded = listeners.values
-            .map { ForwardedPort(guest: $0.guestPort, mac: $0.macPort) }
+        forwarded = listeners
+            .map { ForwardedPort(guest: $0.key, mac: $0.key == 22 ? sshPort : $0.key) }
             .sorted { $0.guest < $1.guest }
+
+        let hasDocker = object["docker"] as? Bool ?? false
+        if hasDocker && dockerListener == nil {
+            openDocker()
+        } else if !hasDocker && dockerListener != nil {
+            closeDocker()
+        }
+    }
+
+    private var dockerDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".linmo", isDirectory: true)
+    }
+
+    private func openDocker() {
+        let path = dockerDirectory.appendingPathComponent("\(dockerName).sock").path
+        try? FileManager.default.createDirectory(at: dockerDirectory, withIntermediateDirectories: true)
+        guard let fd = Listener.bindUnix(path: path) else { return }
+        dockerListener = Listener(fds: [fd], header: [UInt8(ascii: "D")],
+                                  connect: { [weak self] completion in self?.openGuest(completion) })
+        dockerSocketPath = path
+    }
+
+    private func closeDocker() {
+        dockerListener?.close()
+        dockerListener = nil
+        if let path = dockerSocketPath {
+            unlink(path)
+        }
+        dockerSocketPath = nil
     }
 
     private func openGuest(_ completion: @escaping (VZVirtioSocketConnection?) -> Void) {
@@ -142,20 +184,10 @@ final class PortForwarder: ObservableObject {
     }
 
     private final class Listener {
-        let macPort: UInt16
-        let guestPort: UInt16
         private var sources: [DispatchSourceRead] = []
 
-        init?(macPort: UInt16, guestPort: UInt16,
-              connect: @escaping @MainActor (@escaping (VZVirtioSocketConnection?) -> Void) -> Void) {
-            self.macPort = macPort
-            self.guestPort = guestPort
-            guard let v4 = Self.bind(port: macPort, ipv6: false) else { return nil }
-            var fds = [v4]
-            if let v6 = Self.bind(port: macPort, ipv6: true) {
-                fds.append(v6)
-            }
-            let target = guestPort
+        init(fds: [Int32], header: [UInt8],
+             connect: @escaping @MainActor (@escaping (VZVirtioSocketConnection?) -> Void) -> Void) {
             for fd in fds {
                 let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .global(qos: .userInitiated))
                 source.setEventHandler {
@@ -169,7 +201,7 @@ final class PortForwarder: ObservableObject {
                                 Darwin.close(client)
                                 return
                             }
-                            Self.splice(client: client, connection: connection, port: target)
+                            Self.splice(client: client, connection: connection, header: header)
                         }
                     }
                 }
@@ -184,7 +216,39 @@ final class PortForwarder: ObservableObject {
             sources.removeAll()
         }
 
-        private static func bind(port: UInt16, ipv6: Bool) -> Int32? {
+        static func bindUnix(path: String) -> Int32? {
+            let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+            guard fd >= 0 else { return nil }
+            var address = sockaddr_un()
+            address.sun_family = sa_family_t(AF_UNIX)
+            let bytes = Array(path.utf8)
+            let capacity = MemoryLayout.size(ofValue: address.sun_path)
+            guard bytes.count < capacity else {
+                Darwin.close(fd)
+                return nil
+            }
+            withUnsafeMutableBytes(of: &address.sun_path) { buffer in
+                buffer.copyBytes(from: bytes)
+                buffer[bytes.count] = 0
+            }
+            address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+            unlink(path)
+            let bound = withUnsafePointer(to: &address) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                    Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+                }
+            }
+            guard bound == 0, listen(fd, 64) == 0 else {
+                Darwin.close(fd)
+                return nil
+            }
+            chmod(path, 0o600)
+            let flags = fcntl(fd, F_GETFL)
+            _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
+            return fd
+        }
+
+        static func bindTCP(port: UInt16, ipv6: Bool) -> Int32? {
             let fd = socket(ipv6 ? AF_INET6 : AF_INET, SOCK_STREAM, 0)
             guard fd >= 0 else { return nil }
             var on: Int32 = 1
@@ -224,11 +288,11 @@ final class PortForwarder: ObservableObject {
             return fd
         }
 
-        private static func splice(client: Int32, connection: VZVirtioSocketConnection, port: UInt16) {
+        private static func splice(client: Int32, connection: VZVirtioSocketConnection, header: [UInt8]) {
             let guest = connection.fileDescriptor
             var on: Int32 = 1
             setsockopt(guest, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
-            var header: [UInt8] = [UInt8(ascii: "C"), UInt8(port >> 8), UInt8(port & 0xff)]
+            var header = header
             guard write(guest, &header, header.count) == header.count else {
                 Darwin.close(client)
                 connection.close()
