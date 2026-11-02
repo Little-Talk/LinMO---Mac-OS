@@ -63,9 +63,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard MachineLibrary.shared.hasRunningMachines else { return .terminateNow }
+        let library = MachineLibrary.shared
+        guard library.hasRunningMachines else { return .terminateNow }
         let alert = NSAlert()
         alert.messageText = "ยังมีเครื่อง Linux ทำงานอยู่"
+        if library.canSuspendAllRunning {
+            alert.informativeText = "พักเครื่องไว้ก่อนได้ เปิดครั้งหน้าจะกลับมาที่เดิมทันที ทั้งแอพและไฟล์ที่เปิดค้างไว้"
+            alert.addButton(withTitle: "พักเครื่องแล้วปิดแอพ")
+            alert.addButton(withTitle: "ยกเลิก")
+            alert.addButton(withTitle: "ปิดแอพเลย")
+            switch alert.runModal() {
+            case .alertFirstButtonReturn:
+                library.suspendAll {
+                    NSApp.reply(toApplicationShouldTerminate: true)
+                }
+                return .terminateLater
+            case .alertThirdButtonReturn:
+                return .terminateNow
+            default:
+                return .terminateCancel
+            }
+        }
         alert.informativeText = "ถ้าปิดแอพตอนนี้ เครื่องจะถูกตัดไฟทันที ข้อมูลที่ยังไม่บันทึกอาจหาย ควรปิดเครื่องใน Linux ก่อน"
         alert.alertStyle = .warning
         alert.addButton(withTitle: "ยกเลิก")

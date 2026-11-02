@@ -5,7 +5,7 @@ import Virtualization
 @MainActor
 final class MachineController: NSObject, ObservableObject, Identifiable {
     enum State: Equatable {
-        case stopped, starting, running, stopping
+        case stopped, starting, running, suspending, stopping
     }
 
     let bundle: MachineBundle
@@ -16,11 +16,14 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     @Published private(set) var virtualMachine: VZVirtualMachine?
     @Published private(set) var snapshots: [Snapshot] = []
     @Published private(set) var setupStatus: SetupStatus?
+    @Published private(set) var isSuspended = false
+    @Published private(set) var canSuspend = false
     @Published var errorMessage: String?
 
     private var setupListener: SetupProgressListener?
     private var displayView: VZVirtualMachineView?
     let seamless: SeamlessSession
+    let ports = PortForwarder()
     private var restartAfterSetup = false
     private let fileAccess = SecurityScopedAccess()
     private var folderWatcher: SharedFolderWatcher?
@@ -31,6 +34,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         self.config = config
         self.seamless = SeamlessSession(machineName: config.name)
         super.init()
+        isSuspended = bundle.hasSavedState
         reloadSnapshots()
         seamless.onAppsChanged = { [weak self] apps in
             guard let self else { return }
@@ -84,6 +88,8 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             let configuration = try ConfigurationBuilder.make(bundle: bundle, config: config)
             try configuration.validate()
 
+            canSuspend = (try? configuration.validateSaveRestoreSupport()) != nil
+
             let machine = VZVirtualMachine(configuration: configuration)
             machine.delegate = self
             virtualMachine = machine
@@ -94,24 +100,120 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             seamless.prefersMacTextInput = config.macTextInput
             seamless.prefersWayland = config.preferWayland
             seamless.attach(to: machine)
+            ports.attach(to: machine, sshPort: UInt16(clamping: assignSSHPort()))
             startFolderWatcher()
 
-            machine.start { [weak self] result in
-                Task { @MainActor in
-                    guard let self else { return }
-                    switch result {
-                    case .success:
-                        self.state = .running
-                    case .failure(let error):
-                        self.errorMessage = "เปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)"
-                        self.didStop()
-                    }
-                }
+            if bundle.hasSavedState && canSuspend {
+                resume(machine)
+            } else {
+                bundle.discardSavedState()
+                isSuspended = false
+                boot(machine)
             }
         } catch {
             fileAccess.endAll()
             errorMessage = "ตั้งค่าเครื่องไม่สำเร็จ: \(error.localizedDescription)"
         }
+    }
+
+    private func assignSSHPort() -> Int {
+        if let port = config.sshPort { return port }
+        let used = Set(MachineLibrary.shared.machines.compactMap { $0.config.sshPort })
+        var port = 2222
+        while used.contains(port) { port += 1 }
+        update { $0.sshPort = port }
+        return port
+    }
+
+    private func boot(_ machine: VZVirtualMachine) {
+        machine.start { [weak self] result in
+            Task { @MainActor in
+                guard let self else { return }
+                switch result {
+                case .success:
+                    self.state = .running
+                case .failure(let error):
+                    self.errorMessage = "เปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                    self.didStop()
+                }
+            }
+        }
+    }
+
+    private func resume(_ machine: VZVirtualMachine) {
+        machine.restoreMachineStateFrom(url: bundle.savedStateURL) { [weak self] error in
+            Task { @MainActor in
+                guard let self, self.virtualMachine === machine else { return }
+                self.bundle.discardSavedState()
+                self.isSuspended = false
+                if error != nil {
+                    self.boot(machine)
+                    return
+                }
+                machine.resume { [weak self] result in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        switch result {
+                        case .success:
+                            self.state = .running
+                        case .failure(let error):
+                            self.errorMessage = "เปิดเครื่องต่อจากที่พักไว้ไม่สำเร็จ: \(error.localizedDescription)"
+                            self.forceStop()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    func suspend(completion: (() -> Void)? = nil) {
+        guard let machine = virtualMachine, state == .running, canSuspend, machine.canPause else {
+            completion?()
+            return
+        }
+        restartAfterSetup = false
+        state = .suspending
+        let url = bundle.savedStateURL
+        machine.pause { [weak self] result in
+            Task { @MainActor in
+                guard let self else { completion?(); return }
+                if case .failure(let error) = result {
+                    self.errorMessage = "พักเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                    self.state = .running
+                    completion?()
+                    return
+                }
+                machine.saveMachineStateTo(url: url) { [weak self] error in
+                    Task { @MainActor in
+                        guard let self else { completion?(); return }
+                        if let error {
+                            self.bundle.discardSavedState()
+                            self.errorMessage = "พักเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                            machine.resume { _ in
+                                Task { @MainActor in
+                                    self.state = .running
+                                    completion?()
+                                }
+                            }
+                            return
+                        }
+                        self.isSuspended = true
+                        machine.stop { _ in
+                            Task { @MainActor in
+                                self.didStop()
+                                completion?()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    func discardSuspendedState() {
+        guard state == .stopped else { return }
+        bundle.discardSavedState()
+        isSuspended = false
     }
 
     private func openUserSelectedFiles() throws {
@@ -204,6 +306,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         folderWatcher = nil
         fileAccess.endAll()
         seamless.detach(from: virtualMachine)
+        ports.detach()
         setupListener?.detach(from: virtualMachine)
         setupListener = nil
         if setupStatus?.finished != true {

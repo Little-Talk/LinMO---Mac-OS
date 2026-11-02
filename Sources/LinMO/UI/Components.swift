@@ -3,6 +3,7 @@ import Virtualization
 
 struct StatusBadge: View {
     let state: MachineController.State
+    var suspended = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -17,9 +18,10 @@ struct StatusBadge: View {
 
     private var label: String {
         switch state {
-        case .stopped: return "ปิดอยู่"
+        case .stopped: return suspended ? "พักอยู่" : "ปิดอยู่"
         case .starting: return "กำลังเปิด…"
         case .running: return "ทำงานอยู่"
+        case .suspending: return "กำลังพักเครื่อง…"
         case .stopping: return "กำลังปิด…"
         }
     }
@@ -27,8 +29,8 @@ struct StatusBadge: View {
     private var color: Color {
         switch state {
         case .running: return .green
-        case .starting, .stopping: return .orange
-        case .stopped: return .gray
+        case .starting, .suspending, .stopping: return .orange
+        case .stopped: return suspended ? .blue : .gray
         }
     }
 }

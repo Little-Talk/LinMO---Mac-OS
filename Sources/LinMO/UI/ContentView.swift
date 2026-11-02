@@ -60,7 +60,7 @@ private struct MachineRow: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(machine.config.name)
                 .font(.body.weight(.medium))
-            StatusBadge(state: machine.state)
+            StatusBadge(state: machine.state, suspended: machine.isSuspended)
                 .font(.caption)
         }
         .padding(.vertical, 3)
