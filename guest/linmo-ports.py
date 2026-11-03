@@ -9,7 +9,9 @@ import threading
 
 PORT = int(os.environ.get("LINMO_PORTS_PORT", "5300"))
 DOCKER = os.environ.get("LINMO_DOCKER_SOCKET", "/var/run/docker.sock")
-SKIP = {25, 53, 111, 631, 5353}
+SKIP = {25, 53, 111, 323, 631, 5353, 5355}
+SYSTEM = {"systemd-resolve", "systemd-resolved", "cupsd", "avahi-daemon", "rpcbind", "chronyd", "exim4",
+          "master", "dnsmasq", "containerd", "spice-vdagentd", "cups-browsed", "rpc.statd"}
 LOCAL = {
     "/proc/net/tcp": {"00000000", "0100007F"},
     "/proc/net/tcp6": {"00000000000000000000000000000000", "00000000000000000000000001000000",
@@ -21,22 +23,65 @@ def log(*args):
     print("[linmo-ports]", *args, file=sys.stderr, flush=True)
 
 
+def socket_owners(inodes):
+    owners = {}
+    if not inodes:
+        return owners
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        fd_dir = f"/proc/{pid}/fd"
+        try:
+            fds = os.listdir(fd_dir)
+        except OSError:
+            continue
+        name = None
+        for fd in fds:
+            try:
+                target = os.readlink(f"{fd_dir}/{fd}")
+            except OSError:
+                continue
+            if not target.startswith("socket:["):
+                continue
+            inode = target[8:-1]
+            if inode in inodes and inode not in owners:
+                if name is None:
+                    try:
+                        with open(f"/proc/{pid}/comm") as f:
+                            name = f.read().strip()
+                    except OSError:
+                        name = ""
+                owners[inode] = name
+    return owners
+
+
 def listening():
-    ports = set()
+    found = {}
     for path, local in LOCAL.items():
         try:
             with open(path) as f:
                 next(f, None)
                 for line in f:
                     parts = line.split()
-                    if len(parts) < 4 or parts[3] != "0A":
+                    if len(parts) < 10 or parts[3] != "0A":
                         continue
                     addr, port = parts[1].split(":")
                     if addr in local:
-                        ports.add(int(port, 16))
+                        found.setdefault(int(port, 16), set()).add(parts[9])
         except OSError:
             pass
-    return sorted(p for p in ports if p not in SKIP and p != PORT)
+    owners = socket_owners({inode for inodes in found.values() for inode in inodes})
+    ports, names = [], {}
+    for port in sorted(found):
+        if port in SKIP or port == PORT:
+            continue
+        name = next((owners[i] for i in found[port] if owners.get(i)), None)
+        if name in SYSTEM:
+            continue
+        ports.append(port)
+        if name:
+            names[str(port)] = name
+    return ports, names
 
 
 def main_user():
@@ -91,7 +136,8 @@ def handle(conn):
     try:
         op = recv_exact(conn, 1)
         if op == b"L":
-            conn.sendall(json.dumps({"ports": listening(), "user": main_user(),
+            ports, names = listening()
+            conn.sendall(json.dumps({"ports": ports, "names": names, "user": main_user(),
                                      "docker": os.path.exists(DOCKER)}).encode())
             return
         if op in (b"C", b"D"):

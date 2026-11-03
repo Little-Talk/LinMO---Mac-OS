@@ -331,7 +331,7 @@ struct PortsMenu: View {
                 } else {
                     Section("เปิดใน browser ของ Mac") {
                         ForEach(web) { port in
-                            Button("localhost:\(String(port.mac))") {
+                            Button("localhost:\(String(port.mac))" + (port.program.map { " — \($0)" } ?? "")) {
                                 if let url = URL(string: "http://localhost:\(port.mac)") {
                                     NSWorkspace.shared.open(url)
                                 }

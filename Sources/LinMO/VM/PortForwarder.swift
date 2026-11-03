@@ -5,6 +5,7 @@ import Virtualization
 struct ForwardedPort: Hashable, Identifiable {
     let guest: UInt16
     let mac: UInt16
+    var program: String?
     var id: UInt16 { guest }
 }
 
@@ -127,6 +128,7 @@ final class PortForwarder: ObservableObject {
         isAvailable = true
         guestUser = object["user"] as? String
         let wanted = Set((object["ports"] as? [Int] ?? []).compactMap { UInt16(exactly: $0) })
+        let names = object["names"] as? [String: String] ?? [:]
 
         for (guest, listener) in listeners where !wanted.contains(guest) {
             listener.close()
@@ -140,7 +142,7 @@ final class PortForwarder: ObservableObject {
                                         connect: { [weak self] completion in self?.openGuest(completion) })
         }
         forwarded = listeners
-            .map { ForwardedPort(guest: $0.key, mac: $0.key == 22 ? sshPort : $0.key) }
+            .map { ForwardedPort(guest: $0.key, mac: $0.key == 22 ? sshPort : $0.key, program: names[String($0.key)]) }
             .sorted { $0.guest < $1.guest }
 
         let hasDocker = object["docker"] as? Bool ?? false
