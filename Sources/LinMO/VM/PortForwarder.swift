@@ -195,6 +195,7 @@ final class PortForwarder: ObservableObject {
                 source.setEventHandler {
                     let client = accept(fd, nil, nil)
                     guard client >= 0 else { return }
+                    Self.makeBlocking(client)
                     var on: Int32 = 1
                     setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
                     Task { @MainActor in
@@ -290,8 +291,16 @@ final class PortForwarder: ObservableObject {
             return fd
         }
 
+        private static func makeBlocking(_ fd: Int32) {
+            let flags = fcntl(fd, F_GETFL)
+            if flags >= 0 && flags & O_NONBLOCK != 0 {
+                _ = fcntl(fd, F_SETFL, flags & ~O_NONBLOCK)
+            }
+        }
+
         private static func splice(client: Int32, connection: VZVirtioSocketConnection, header: [UInt8]) {
             let guest = connection.fileDescriptor
+            makeBlocking(guest)
             var on: Int32 = 1
             setsockopt(guest, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
             var header = header
