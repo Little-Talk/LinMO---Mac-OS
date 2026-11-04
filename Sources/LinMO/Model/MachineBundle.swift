@@ -75,6 +75,32 @@ struct MachineBundle {
         return bundle
     }
 
+    static func create(config: MachineConfig, importing image: URL, kind: DiskImageKind) throws -> (MachineBundle, MachineConfig) {
+        let accessing = image.startAccessingSecurityScopedResource()
+        defer { if accessing { image.stopAccessingSecurityScopedResource() } }
+        let fm = FileManager.default
+        var config = config
+        let bundle: MachineBundle
+        if kind == .qcow2 {
+            try fm.createDirectory(at: appSupportDirectory, withIntermediateDirectories: true)
+            let temp = appSupportDirectory.appendingPathComponent("Import-\(config.id.uuidString).img")
+            defer { try? fm.removeItem(at: temp) }
+            try DiskConverters.convertQcow2(source: image, destination: temp)
+            bundle = try create(config: config, diskSource: temp)
+        } else {
+            bundle = try create(config: config, diskSource: image)
+        }
+        let gb = UInt64(1024 * 1024 * 1024)
+        if let size = (try? fm.attributesOfItem(atPath: bundle.diskURL.path))?[.size] as? UInt64 {
+            let sizeGB = Int((size + gb - 1) / gb)
+            if sizeGB > config.diskGB {
+                config.diskGB = sizeGB
+                try bundle.save(config)
+            }
+        }
+        return (bundle, config)
+    }
+
     func macAddress() -> VZMACAddress {
         if let text = try? String(contentsOf: macAddressURL, encoding: .utf8),
            let saved = VZMACAddress(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) {

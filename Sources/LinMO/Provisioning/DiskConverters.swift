@@ -2,6 +2,26 @@ import Compression
 import CryptoKit
 import Foundation
 
+enum DiskImageKind {
+    case iso, qcow2, raw
+
+    static func detect(at url: URL) -> DiskImageKind {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return .raw }
+        defer { try? handle.close() }
+        if let head = try? handle.read(upToCount: 4), head.count == 4, Array(head) == [0x51, 0x46, 0x49, 0xFB] {
+            return .qcow2
+        }
+        for offset: UInt64 in [0x8001, 0x8801, 0x9001] {
+            if (try? handle.seek(toOffset: offset)) != nil,
+               let magic = try? handle.read(upToCount: 5),
+               magic == Data("CD001".utf8) {
+                return .iso
+            }
+        }
+        return .raw
+    }
+}
+
 enum DiskConverters {
 
 

@@ -25,6 +25,9 @@ struct NewMachineSheet: View {
     @State private var diskGB = 32
     @State private var isoPath: String?
     @State private var isoBookmark: Data?
+    @State private var isoKind: DiskImageKind = .iso
+    @State private var useImageAsDisk = false
+    @State private var importingDisk = false
     @State private var sharedFolderPath: String?
     @State private var sharedFolderBookmark: Data?
 
@@ -62,7 +65,7 @@ struct NewMachineSheet: View {
             footer
         }
         .frame(width: 620, height: 640)
-        .interactiveDismissDisabled(step == .progress)
+        .interactiveDismissDisabled(step == .progress || importingDisk)
         .errorAlert($errorMessage)
     }
 
@@ -89,8 +92,8 @@ struct NewMachineSheet: View {
             }
 
             SourceCard(
-                title: "ติดตั้งเองจากไฟล์ ISO",
-                subtitle: "ใช้ไฟล์ติดตั้ง ARM64 ของ distro ไหนก็ได้ เช่น Ubuntu, Fedora",
+                title: "ติดตั้งเองจากไฟล์ ISO หรือ IMG",
+                subtitle: "ใช้ไฟล์ติดตั้ง หรือไฟล์ดิสก์ .img ARM64 ของ distro ไหนก็ได้ เช่น Ubuntu, Fedora, Armbian",
                 detail: "สำหรับผู้ที่คุ้นเคย ต้องกดติดตั้งเองตามขั้นตอนของ distro",
                 systemImage: "opticaldisc",
                 isSelected: source == .customISO
@@ -131,7 +134,7 @@ struct NewMachineSheet: View {
 
             if source == .customISO {
                 Section("ไฟล์ติดตั้ง") {
-                    LabeledContent("ไฟล์ ISO (ARM64)") {
+                    LabeledContent("ไฟล์ ISO / IMG (ARM64)") {
                         HStack {
                             Text(isoPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "ยังไม่ได้เลือก")
                                 .foregroundStyle(isoPath == nil ? .secondary : .primary)
@@ -142,11 +145,33 @@ struct NewMachineSheet: View {
                     }
                     .fileImporter(
                         isPresented: $showingISOPicker,
-                        allowedContentTypes: [UTType(filenameExtension: "iso") ?? .diskImage, .diskImage]
+                        allowedContentTypes: ["iso", "img", "raw", "qcow2"].compactMap { UTType(filenameExtension: $0) } + [.diskImage]
                     ) { result in
                         if case .success(let url) = result {
+                            let accessing = url.startAccessingSecurityScopedResource()
+                            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
                             isoPath = url.path
                             isoBookmark = SecurityScopedBookmark.make(for: url)
+                            isoKind = DiskImageKind.detect(at: url)
+                            useImageAsDisk = isoKind != .iso
+                        }
+                    }
+                    if isoPath != nil {
+                        if isoKind == .qcow2 {
+                            Text("ไฟล์ qcow2 จะถูกแปลงเป็นดิสก์ของเครื่อง แล้วบูตจากดิสก์นั้นเลย")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else if isoKind == .raw || isoPath.map({ URL(fileURLWithPath: $0).pathExtension.lowercased() != "iso" }) == true {
+                            Picker("ใช้ไฟล์นี้เป็น", selection: $useImageAsDisk) {
+                                Text("แผ่นติดตั้ง (เหมือน ISO)").tag(false)
+                                Text("ดิสก์ของเครื่อง (บูตได้เลย)").tag(true)
+                            }
+                            .pickerStyle(.radioGroup)
+                            Text(useImageAsDisk
+                                 ? "คัดลอกไฟล์เป็นดิสก์ของเครื่องแล้วขยายเป็น \(diskGB) GB ไฟล์ต้นฉบับไม่ถูกแก้ ใช้กับไฟล์ดิสก์ที่บูตด้วย UEFI ได้ เช่น Armbian, Debian raw"
+                                 : "ต่อไฟล์เข้าเครื่องเป็น USB แบบอ่านอย่างเดียว ใช้กับไฟล์ติดตั้งแบบ live USB")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -284,10 +309,17 @@ struct NewMachineSheet: View {
 
             case .configure:
                 Button("ย้อนกลับ") { step = .chooseSource }
+                    .disabled(importingDisk)
                 Spacer()
+                if importingDisk {
+                    ProgressView().controlSize(.small)
+                    Text("กำลังเตรียมดิสก์…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Button(source == .customISO ? "สร้างเครื่อง" : "ติดตั้ง") { create() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(!canCreate)
+                    .disabled(!canCreate || importingDisk)
 
             case .progress:
                 switch provisioner.phase {
@@ -340,9 +372,31 @@ struct NewMachineSheet: View {
         switch source {
         case .customISO:
             var config = makeConfig()
+            config.rosettaEnabled = rosetta && rosettaAvailability == .installed
+            if useImageAsDisk, let isoPath {
+                let image = isoBookmark.flatMap { SecurityScopedBookmark.resolve($0)?.url } ?? URL(fileURLWithPath: isoPath)
+                let kind = isoKind
+                let pending = config
+                importingDisk = true
+                Task {
+                    let result = await Task.detached(priority: .userInitiated) {
+                        Result { try MachineBundle.create(config: pending, importing: image, kind: kind) }
+                    }.value
+                    importingDisk = false
+                    switch result {
+                    case .success(let (bundle, saved)):
+                        let controller = MachineController(bundle: bundle, config: saved)
+                        library.add(controller)
+                        onCreated(controller)
+                        dismiss()
+                    case .failure(let error):
+                        errorMessage = "สร้างเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                    }
+                }
+                return
+            }
             config.installerISOPath = isoPath
             config.installerISOBookmark = isoBookmark
-            config.rosettaEnabled = rosetta && rosettaAvailability == .installed
             do {
                 let bundle = try MachineBundle.create(config: config)
                 let controller = MachineController(bundle: bundle, config: config)

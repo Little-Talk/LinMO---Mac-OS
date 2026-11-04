@@ -61,7 +61,7 @@ enum ConfigurationBuilder {
         }
         if let isoPath = config.installerISOPath {
             guard FileManager.default.fileExists(atPath: isoPath) else {
-                throw LinMOError.message("หาไฟล์ ISO ไม่เจอ: \(isoPath) — ถ้าติดตั้งเสร็จแล้ว ให้กด \"ถอดแผ่นติดตั้ง\"")
+                throw LinMOError.message("หาไฟล์ติดตั้งไม่เจอ: \(isoPath) — ถ้าติดตั้งเสร็จแล้ว ให้กด \"ถอดแผ่นติดตั้ง\"")
             }
             storage.append(
                 VZUSBMassStorageDeviceConfiguration(
