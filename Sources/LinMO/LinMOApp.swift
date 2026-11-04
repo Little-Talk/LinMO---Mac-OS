@@ -7,6 +7,7 @@ struct LinMOApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var library = MachineLibrary.shared
     @StateObject private var menuBarSetting = MenuBarSetting.shared
+    @StateObject private var updater = AppUpdater.shared
 
     var body: some Scene {
         Window("LinMO", id: "main") {
@@ -15,6 +16,7 @@ struct LinMOApp: App {
         }
         .commands {
             UserGuideCommands()
+            AppUpdateCommands(updater: updater)
         }
 
         Window(GuideLanguage.systemDefault == .thai ? "คู่มือ LinMO" : "LinMO Guide", id: "guide") {

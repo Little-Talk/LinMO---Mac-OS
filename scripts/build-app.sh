@@ -15,6 +15,17 @@ case "$MODE" in
     ;;
 esac
 
+SPARKLE=1
+BUILD_ARGS=(-c "$CONFIG" --arch arm64)
+case "$MODE" in
+  sandbox|appstore)
+    SPARKLE=0
+    export LINMO_NO_SPARKLE=1
+    BUILD_ARGS+=(--build-path .build-nosparkle)
+    ;;
+esac
+FEED_URL="${SPARKLE_FEED_URL:-https://github.com/Little-Talk/LinMO---Mac-OS/releases/latest/download/appcast.xml}"
+
 if [[ "$MODE" == "appstore" ]]; then
   for var in SIGN_IDENTITY INSTALLER_IDENTITY TEAM_ID PROVISIONING_PROFILE; do
     if [[ -z "${!var:-}" ]]; then
@@ -29,8 +40,8 @@ if command -v python3 >/dev/null 2>&1; then
 fi
 
 echo "▶ กำลัง build ($CONFIG)…"
-swift build -c "$CONFIG" --arch arm64
-BIN_DIR="$(swift build -c "$CONFIG" --arch arm64 --show-bin-path)"
+swift build "${BUILD_ARGS[@]}"
+BIN_DIR="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)"
 
 echo "▶ กำลังประกอบ ${APP}…"
 rm -rf "$APP"
@@ -39,6 +50,26 @@ cp "$BIN_DIR/LinMO" "$APP/Contents/MacOS/LinMO"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/PrivacyInfo.xcprivacy "$APP/Contents/Resources/"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"
+
+if [[ "$SPARKLE" == "1" ]]; then
+  mkdir -p "$APP/Contents/Frameworks"
+  ditto "$BIN_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
+  install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/LinMO" 2>/dev/null || true
+  PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-}"
+  if [[ -z "$PUBLIC_KEY" ]]; then
+    GENERATE_KEYS="$(find .build/artifacts -type f -name generate_keys 2>/dev/null | head -1)"
+    if [[ -n "$GENERATE_KEYS" ]]; then
+      PUBLIC_KEY="$("$GENERATE_KEYS" -p 2>/dev/null || true)"
+    fi
+  fi
+  /usr/libexec/PlistBuddy -c "Add :SUFeedURL string $FEED_URL" "$APP/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Add :SUEnableAutomaticChecks bool true" "$APP/Contents/Info.plist"
+  if [[ -n "$PUBLIC_KEY" ]]; then
+    /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $PUBLIC_KEY" "$APP/Contents/Info.plist"
+  else
+    echo "ℹ️  ยังไม่มีกุญแจ Sparkle ใน Keychain — แอพนี้จะไม่มีเมนูตรวจหาอัปเดต (รัน scripts/release.sh เพื่อสร้างกุญแจ)"
+  fi
+fi
 if xcrun --find actool >/dev/null 2>&1; then
   xcrun actool Resources/AppIcon.xcassets \
     --compile "$APP/Contents/Resources" \
@@ -63,6 +94,24 @@ if [[ "$MODE" == "appstore" ]]; then
   cp "$ENTITLEMENTS" "$SIGN_ENTITLEMENTS"
   /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $TEAM_ID.$BUNDLE_ID" "$SIGN_ENTITLEMENTS"
   /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string $TEAM_ID" "$SIGN_ENTITLEMENTS"
+fi
+
+if [[ "$SPARKLE" == "1" ]]; then
+  if [[ -z "${SIGN_IDENTITY:-}" ]]; then
+    SIGN_ENTITLEMENTS="build/LinMO-adhoc.entitlements"
+    cp "$ENTITLEMENTS" "$SIGN_ENTITLEMENTS"
+    /usr/libexec/PlistBuddy -c "Add :com.apple.security.cs.disable-library-validation bool true" "$SIGN_ENTITLEMENTS"
+  fi
+  SPARKLE_DIR="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+  for item in "$SPARKLE_DIR/XPCServices/Installer.xpc" "$SPARKLE_DIR/Autoupdate" "$SPARKLE_DIR/Updater.app"; do
+    if [[ -e "$item" ]]; then
+      codesign --force --sign "${SIGN_IDENTITY:--}" --options runtime "$item"
+    fi
+  done
+  if [[ -e "$SPARKLE_DIR/XPCServices/Downloader.xpc" ]]; then
+    codesign --force --sign "${SIGN_IDENTITY:--}" --options runtime --preserve-metadata=entitlements "$SPARKLE_DIR/XPCServices/Downloader.xpc"
+  fi
+  codesign --force --sign "${SIGN_IDENTITY:--}" --options runtime "$APP/Contents/Frameworks/Sparkle.framework"
 fi
 
 echo "▶ กำลังเซ็นแอพ ($SIGN_ENTITLEMENTS)…"

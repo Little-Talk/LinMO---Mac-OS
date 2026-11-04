@@ -9,6 +9,8 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            AppUpdateSettingsSection()
+
             LinuxAppsSettingsSection()
 
             Section {
