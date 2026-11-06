@@ -2,6 +2,7 @@ import SwiftUI
 import Virtualization
 
 struct StatusBadge: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     let state: MachineController.State
     var suspended = false
 
@@ -57,6 +58,7 @@ struct VMDisplayView: NSViewRepresentable {
 
 struct ErrorAlert: ViewModifier {
     @Binding var message: String?
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
 
     func body(content: Content) -> some View {
         content.alert(
@@ -80,6 +82,7 @@ extension View {
 }
 
 struct SetupProgressBanner: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     let status: SetupStatus
     let onDismiss: () -> Void
 

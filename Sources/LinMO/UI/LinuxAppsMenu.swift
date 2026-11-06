@@ -86,6 +86,7 @@ final class MenuBarSetting: ObservableObject {
 }
 
 struct LinuxAppsSettingsSection: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     @ObservedObject private var menuBar = MenuBarSetting.shared
     @AppStorage(LinuxAppCatalog.Keys.spotlight) private var spotlight = true
     @AppStorage(LinuxAppCatalog.Keys.launchpad) private var launchpad = false

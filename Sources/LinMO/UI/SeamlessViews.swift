@@ -3,6 +3,7 @@ import SwiftUI
 import Virtualization
 
 struct SeamlessToggle: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     @ObservedObject var session: SeamlessSession
     @State private var showingInstallHelp = false
 
@@ -44,6 +45,7 @@ struct SeamlessToggle: View {
 }
 
 struct AgentInstallHelp: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     var isUpdate = false
     @State private var copied = false
 
@@ -80,6 +82,7 @@ struct AgentInstallHelp: View {
 }
 
 struct WineInstallButton: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     let rosettaEnabled: Bool
     @State private var showing = false
     @State private var copied = false
@@ -146,6 +149,7 @@ struct WineInstallButton: View {
 }
 
 struct FullScreenButton: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     @ObservedObject var session: SeamlessSession
 
     var body: some View {
@@ -175,6 +179,7 @@ struct RunningDisplay: View {
 }
 
 struct SeamlessLauncherView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     @ObservedObject var session: SeamlessSession
     @State private var search = ""
 

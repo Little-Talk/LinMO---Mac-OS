@@ -102,6 +102,7 @@ private struct LanguageSettingsSection: View {
                 set: { value in
                     appLanguageRaw = value
                     guideLanguageRaw = value
+                    UserDefaults.standard.set([value], forKey: "AppleLanguages")
                 }
             )) {
                 ForEach(AppLanguage.allCases) { language in
@@ -109,7 +110,7 @@ private struct LanguageSettingsSection: View {
                 }
             }
         } footer: {
-            Text(tr("บางเมนูของ macOS จะเปลี่ยนภาษาหลังเปิดแอพใหม่", "Some macOS menus switch language after you reopen the app"))
+            Text(tr("เมนูด้านบนของ Mac (แก้ไข หน้าต่าง ฯลฯ) จะเปลี่ยนภาษาหลังปิดแล้วเปิด LinMO ใหม่", "The Mac menu bar menus (Edit, Window and so on) switch language after you quit and reopen LinMO"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

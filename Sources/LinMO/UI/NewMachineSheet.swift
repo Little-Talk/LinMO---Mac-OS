@@ -3,6 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct NewMachineSheet: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     enum Source: Hashable {
         case distro(Distro)
         case customISO
@@ -446,6 +447,7 @@ struct NewMachineSheet: View {
 }
 
 private struct PresetRow: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     let preset: Preset
     let isSelected: Bool
     let action: () -> Void
@@ -474,6 +476,7 @@ private struct PresetRow: View {
 }
 
 private struct SourceCard: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     let title: String
     let subtitle: String
     let detail: String

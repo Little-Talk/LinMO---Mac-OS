@@ -3,6 +3,7 @@ import AVFoundation
 import SwiftUI
 
 struct MachineDetailView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     @EnvironmentObject private var library: MachineLibrary
     @ObservedObject var machine: MachineController
 
@@ -199,6 +200,7 @@ struct MachineDetailView: View {
 }
 
 struct MachineSettingsSheet: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     @ObservedObject var machine: MachineController
     @Environment(\.dismiss) private var dismiss
 
@@ -320,6 +322,7 @@ struct MachineSettingsSheet: View {
 }
 
 struct PortsMenu: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     @ObservedObject var forwarder: PortForwarder
 
     var body: some View {
@@ -364,6 +367,7 @@ struct PortsMenu: View {
 }
 
 struct ExtraFoldersSheet: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     @ObservedObject var machine: MachineController
     @Environment(\.dismiss) private var dismiss
     @State private var picking = false
