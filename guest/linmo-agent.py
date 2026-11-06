@@ -28,7 +28,7 @@ try:
 except ImportError:
     xfixes = None
 
-VERSION = 11
+VERSION = 12
 FEATURES = ["damage", "icons", "text", "drop", "scale", "shm", "dragout", "folders"]
 HOST_CID = 2
 PORT = int(os.environ.get("LINMO_AGENT_PORT", "5200"))
@@ -1959,7 +1959,7 @@ def main():
         return 1
     log("started on", os.environ.get("DISPLAY"), "screen", desktop.screen_size,
         "damage" if desktop.damage_event else "no-damage")
-    folders = FolderGroup([FolderSync("linmo"), FolderSync("linmo-extra")])
+    folders = FolderGroup([FolderSync("linmo"), FolderSync("linmo-extra"), FolderSync("linmo-drives")])
     while True:
         if agent_replaced():
             restart_agent()

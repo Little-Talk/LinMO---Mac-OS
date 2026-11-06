@@ -28,6 +28,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     private let fileAccess = SecurityScopedAccess()
     private var folderWatcher: SharedFolderWatcher?
     private var extraWatchers: [SharedFolderWatcher] = []
+    private var drivesWatcher: SharedFolderWatcher?
     private var machineLock: MachineLock?
 
     init(bundle: MachineBundle, config: MachineConfig) {
@@ -279,6 +280,13 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
                 Task { @MainActor in self?.seamless.notifyFolderChanges(prefixed, tag: SharedTags.extraFolders) }
             }
         }
+        drivesWatcher?.stop()
+        drivesWatcher = nil
+        if config.macDrivesShared && !AppEnvironment.isSandboxed {
+            drivesWatcher = SharedFolderWatcher(path: SharedTags.volumesPath) { [weak self] paths in
+                Task { @MainActor in self?.seamless.notifyFolderChanges(paths, tag: SharedTags.macDrives) }
+            }
+        }
     }
 
     func addExtraFolder(_ url: URL) {
@@ -387,6 +395,8 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         folderWatcher = nil
         extraWatchers.forEach { $0.stop() }
         extraWatchers = []
+        drivesWatcher?.stop()
+        drivesWatcher = nil
         fileAccess.endAll()
         seamless.detach(from: virtualMachine)
         ports.detach()

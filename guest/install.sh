@@ -176,6 +176,15 @@ if [ -n "$MAIN_USER" ]; then
     fi
 fi
 
+echo "▶ ตั้งค่าฮาร์ดดิสก์ภายนอกของ Mac…"
+mkdir -p /mnt/linmo-drives
+grep -q '^linmo-drives ' /etc/fstab || echo 'linmo-drives /mnt/linmo-drives virtiofs rw,nofail 0 0' >> /etc/fstab
+mountpoint -q /mnt/linmo-drives || mount /mnt/linmo-drives 2>/dev/null || true
+if [ -n "$MAIN_USER" ] && [ -d "$MAIN_HOME" ] && [ ! -e "$MAIN_HOME/MacDrives" ] && [ ! -L "$MAIN_HOME/MacDrives" ]; then
+    ln -s /mnt/linmo-drives "$MAIN_HOME/MacDrives"
+    chown -h "$MAIN_USER:" "$MAIN_HOME/MacDrives" 2>/dev/null || true
+fi
+
 echo "▶ ตั้งค่าส่งต่อพอร์ตและ SSH มาที่ Mac…"
 install -m 0755 "$DIR/linmo-ports.py" /usr/local/lib/linmo/linmo-ports.py
 if command -v apt-get >/dev/null 2>&1; then

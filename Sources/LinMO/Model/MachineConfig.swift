@@ -19,6 +19,7 @@ struct MachineConfig: Codable, Equatable, Identifiable {
     var sshPort: Int?
     var microphoneEnabled: Bool = false
     var extraFolders: [ExtraFolder] = []
+    var macDrivesShared: Bool = true
     var sharedFolderBookmark: Data?
     var installerISOBookmark: Data?
     var createdAt: Date = Date()
@@ -47,6 +48,7 @@ struct MachineConfig: Codable, Equatable, Identifiable {
         sshPort = try c.decodeIfPresent(Int.self, forKey: .sshPort)
         microphoneEnabled = try c.decodeIfPresent(Bool.self, forKey: .microphoneEnabled) ?? false
         extraFolders = (try? c.decodeIfPresent([ExtraFolder].self, forKey: .extraFolders)) ?? []
+        macDrivesShared = try c.decodeIfPresent(Bool.self, forKey: .macDrivesShared) ?? true
         sharedFolderBookmark = try c.decodeIfPresent(Data.self, forKey: .sharedFolderBookmark)
         installerISOBookmark = try c.decodeIfPresent(Data.self, forKey: .installerISOBookmark)
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
