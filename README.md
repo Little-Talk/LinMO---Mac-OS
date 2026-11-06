@@ -6,7 +6,7 @@
 
 The easiest way to use Linux on a Mac, with each Linux app opening in its own Mac window like a regular app.
 
-> Status: **v0.10 (experimental)**. Linux apps show up in Launchpad, Spotlight and the "Linux Apps" menu bar menu.
+> Status: **v0.11 (experimental)**. Linux apps show up in Launchpad, Spotlight and the "Linux Apps" menu bar menu.
 > Ready-made software sets (Learn Linux / Developer / Security lab / Data science / Design), image copy and paste, and Mac App Store packaging.
 > Suspend and resume, Linux ports and SSH from the Mac, Docker from the Mac, microphone, more shared folders, duplicate machines and one-click Wine.
 
@@ -292,7 +292,7 @@ scripts/                           app build and guest file embedding
 
 ใช้ Linux บน Mac แบบง่ายที่สุด และเปิดแอพ Linux เป็นหน้าต่างแยกบน Mac เหมือนแอพปกติ
 
-> สถานะ: **v0.10 (เวอร์ชันทดลอง)** — แอพ Linux อยู่ใน Launchpad, Spotlight และเมนู "แอพ Linux" บนแถบเมนู,
+> สถานะ: **v0.11 (เวอร์ชันทดลอง)** — แอพ Linux อยู่ใน Launchpad, Spotlight และเมนู "แอพ Linux" บนแถบเมนู,
 > ชุดสำเร็จรูป (สายเรียน Linux / สาย dev / สาย security lab / สาย data science / สายออกแบบ), copy-paste รูปภาพ และเตรียมพร้อมส่งขึ้น Mac App Store
 > พักเครื่องแล้วกลับมาที่เดิม, ใช้พอร์ตและ SSH ของ Linux จาก Mac, Docker จาก Mac, ไมโครโฟน, แชร์หลายโฟลเดอร์, ทำสำเนาเครื่อง และติดตั้ง Wine คลิกเดียว
 
