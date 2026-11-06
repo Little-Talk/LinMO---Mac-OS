@@ -45,8 +45,6 @@ final class SeamlessWindowController: NSObject, NSWindowDelegate {
             )
             newWindow.subtitle = session.machineName
             newWindow.tabbingMode = .disallowed
-            let screen = session.guestScreen(for: info.id)
-            newWindow.contentMaxSize = NSSize(width: screen.width / scale, height: screen.height / scale)
             newWindow.contentMinSize = Self.minimumSize(for: info, scale: scale)
         }
         newWindow.isReleasedWhenClosed = false

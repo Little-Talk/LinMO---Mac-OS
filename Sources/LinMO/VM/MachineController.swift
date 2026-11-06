@@ -42,6 +42,9 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             guard let self else { return }
             LinuxAppCatalog.shared.update(machine: self.id, machineName: self.config.name, apps: apps)
         }
+        seamless.onEnabledChanged = { [weak self] enabled in
+            self?.fitDisplay(forSeamless: enabled)
+        }
     }
 
     var isRunning: Bool { state != .stopped }
@@ -353,6 +356,31 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         view.automaticallyReconfiguresDisplay = true
         displayView = view
         return view
+    }
+
+    private var guestDisplay: VZGraphicsDisplay? {
+        virtualMachine?.graphicsDevices.first?.displays.first
+    }
+
+    private func fitDisplay(forSeamless enabled: Bool) {
+        if enabled {
+            try? guestDisplay?.reconfigure(sizeInPixels: seamlessDisplaySize())
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self, !self.seamless.isEnabled, let display = self.guestDisplay,
+                  let view = self.displayView, view.window != nil else { return }
+            let size = view.convertToBacking(view.bounds).size
+            guard size.width >= 320, size.height >= 200, size != display.sizeInPixels else { return }
+            try? display.reconfigure(sizeInPixels: size)
+        }
+    }
+
+    private func seamlessDisplaySize() -> CGSize {
+        let factor: CGFloat = config.hiDPI ? 2 : 1
+        let width = NSScreen.screens.map { $0.frame.width * factor }.max() ?? 1920 * factor
+        let height = NSScreen.screens.map { $0.frame.height * factor }.max() ?? 1200 * factor
+        return CGSize(width: min(max(width, 1920), 7680), height: min(max(height, 1200), 4320))
     }
 
     fileprivate func didStop() {
