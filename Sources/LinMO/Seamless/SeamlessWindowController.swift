@@ -9,6 +9,7 @@ final class SeamlessWindowController: NSObject, NSWindowDelegate {
     private weak var session: SeamlessSession?
     private var info: SeamlessSession.WindowInfo
     private var pendingResize: DispatchWorkItem?
+    private var pendingSnap: DispatchWorkItem?
 
     private static var cascadePoint = NSPoint.zero
 
@@ -94,11 +95,26 @@ final class SeamlessWindowController: NSObject, NSWindowDelegate {
             if window.contentMinSize != minimum { window.contentMinSize = minimum }
         }
         if !info.isPopup && sizeChanged && !window.inLiveResize {
-            let content = NSSize(width: CGFloat(info.w) / scale, height: CGFloat(info.h) / scale)
-            var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: content))
-            frame.origin = NSPoint(x: window.frame.minX, y: window.frame.maxY - frame.height)
-            window.setFrame(frame, display: true)
+            fitToGuest()
         }
+    }
+
+    private func fitToGuest() {
+        let content = NSSize(width: CGFloat(info.w) / scale, height: CGFloat(info.h) / scale)
+        var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: content))
+        frame.origin = NSPoint(x: window.frame.minX, y: window.frame.maxY - frame.height)
+        guard frame.size != window.frame.size else { return }
+        window.setFrame(frame, display: true)
+    }
+
+    private func scheduleSnap() {
+        pendingSnap?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, !self.window.inLiveResize else { return }
+            self.fitToGuest()
+        }
+        pendingSnap = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
     }
 
     private static func minimumSize(for info: SeamlessSession.WindowInfo, scale: CGFloat) -> NSSize {
@@ -115,6 +131,7 @@ final class SeamlessWindowController: NSObject, NSWindowDelegate {
 
     func close() {
         pendingResize?.cancel()
+        pendingSnap?.cancel()
         window.delegate = nil
         view.releaseAllKeys()
         window.orderOut(nil)
@@ -150,9 +167,15 @@ final class SeamlessWindowController: NSObject, NSWindowDelegate {
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.session?.send(.resize, ["id": self.id, "w": width, "h": height])
+            self.scheduleSnap()
         }
         pendingResize = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: work)
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        guard !info.isPopup else { return }
+        scheduleSnap()
     }
 }
 
