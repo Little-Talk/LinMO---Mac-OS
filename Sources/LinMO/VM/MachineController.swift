@@ -28,6 +28,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     private let fileAccess = SecurityScopedAccess()
     private var folderWatcher: SharedFolderWatcher?
     private var extraWatchers: [SharedFolderWatcher] = []
+    private var machineLock: MachineLock?
 
     init(bundle: MachineBundle, config: MachineConfig) {
         self.bundle = bundle
@@ -64,6 +65,10 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
 
     func growDisk(toGB gb: Int) {
         guard state == .stopped, gb > config.diskGB else { return }
+        guard !isSuspended else {
+            errorMessage = "เครื่องพักอยู่ ขยายดิสก์ไม่ได้ เปิดเครื่องแล้วปิดเครื่องก่อนจึงจะขยายดิสก์ได้"
+            return
+        }
         do {
             try bundle.growDisk(toGB: gb)
             update { $0.diskGB = gb }
@@ -90,6 +95,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             return
         }
         do {
+            machineLock = try bundle.acquireLock()
             try openUserSelectedFiles()
             let configuration = try ConfigurationBuilder.make(bundle: bundle, config: config)
             try configuration.validate()
@@ -118,6 +124,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             }
         } catch {
             fileAccess.endAll()
+            machineLock = nil
             errorMessage = "ตั้งค่าเครื่องไม่สำเร็จ: \(error.localizedDescription)"
         }
     }
@@ -363,6 +370,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         }
         virtualMachine = nil
         displayView = nil
+        machineLock = nil
         state = .stopped
 
         if restartAfterSetup {
@@ -408,7 +416,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     }
 
     func createSnapshot(named name: String) {
-        guard state == .stopped else { return }
+        guard state == .stopped, !isSuspended else { return }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalName = trimmed.isEmpty
             ? "Snapshot " + Date().formatted(date: .abbreviated, time: .shortened)
@@ -422,7 +430,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     }
 
     func restoreSnapshot(_ snapshot: Snapshot) {
-        guard state == .stopped else { return }
+        guard state == .stopped, !isSuspended else { return }
         do {
             try bundle.restoreSnapshot(snapshot)
         } catch {
