@@ -125,6 +125,44 @@ else
     echo "  ยังไม่พบ Rosetta — เปิด Rosetta ในการตั้งค่าเครื่องบน Mac แล้วรีสตาร์ทเครื่อง จากนั้นรันคำสั่งติดตั้งนี้อีกครั้ง"
 fi
 
+echo "▶ ตั้งค่าเสียง…"
+if ! modprobe snd-virtio 2>/dev/null; then
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get install -y -qq "linux-modules-extra-$(uname -r)" >/dev/null 2>&1 || true
+        if dpkg -s linux-virtual >/dev/null 2>&1 && ! dpkg -s linux-generic >/dev/null 2>&1; then
+            apt-get install -y -qq linux-generic >/dev/null 2>&1 || true
+        fi
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y -q "kernel-modules-$(uname -r)" kernel-modules >/dev/null 2>&1 || true
+    fi
+    modprobe snd-virtio 2>/dev/null || true
+fi
+install -d /etc/modules-load.d
+echo snd-virtio > /etc/modules-load.d/linmo-sound.conf
+if ! command -v pipewire-pulse >/dev/null 2>&1 && ! command -v pulseaudio >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get install -y -qq pipewire-audio wireplumber pipewire-pulse pipewire-alsa >/dev/null 2>&1 \
+            || apt-get install -y -qq pulseaudio >/dev/null 2>&1 || true
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y -q pipewire-pulseaudio wireplumber pipewire-alsa >/dev/null 2>&1 || true
+    elif command -v pacman >/dev/null 2>&1; then
+        pacman -S --noconfirm --needed pipewire-pulse wireplumber pipewire-alsa >/dev/null 2>&1 || true
+    fi
+fi
+if command -v pipewire-pulse >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
+    systemctl --global enable pipewire.socket pipewire-pulse.socket wireplumber.service >/dev/null 2>&1 || true
+fi
+if command -v xfce4-panel >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then
+    apt-get install -y -qq xfce4-pulseaudio-plugin pavucontrol >/dev/null 2>&1 || true
+elif command -v xfce4-panel >/dev/null 2>&1 && command -v dnf >/dev/null 2>&1; then
+    dnf install -y -q xfce4-pulseaudio-plugin pavucontrol >/dev/null 2>&1 || true
+fi
+if [ -d /sys/module/snd_virtio ]; then
+    echo "  พบอุปกรณ์เสียงแล้ว"
+else
+    echo "  ยังโหลดไดรเวอร์เสียง snd-virtio ไม่ได้ — รีสตาร์ทเครื่องแล้วลองใหม่"
+fi
+
 echo "▶ ตั้งค่าโฟลเดอร์แชร์เพิ่มเติม…"
 mkdir -p /mnt/linmo-extra
 grep -q '^linmo-extra ' /etc/fstab || echo 'linmo-extra /mnt/linmo-extra virtiofs rw,nofail 0 0' >> /etc/fstab
