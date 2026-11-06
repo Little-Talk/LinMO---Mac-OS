@@ -353,7 +353,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         let view = VZVirtualMachineView()
         view.virtualMachine = vm
         view.capturesSystemKeys = true
-        view.automaticallyReconfiguresDisplay = true
+        view.automaticallyReconfiguresDisplay = !seamless.isEnabled
         displayView = view
         return view
     }
@@ -363,15 +363,14 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     }
 
     private func fitDisplay(forSeamless enabled: Bool) {
-        if enabled {
-            try? guestDisplay?.reconfigure(sizeInPixels: seamlessDisplaySize())
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self, !self.seamless.isEnabled, let display = self.guestDisplay,
-                  let view = self.displayView, view.window != nil else { return }
-            let size = view.convertToBacking(view.bounds).size
-            guard size.width >= 320, size.height >= 200, size != display.sizeInPixels else { return }
+        displayView?.automaticallyReconfiguresDisplay = !enabled
+        guard enabled else { return }
+        try? guestDisplay?.reconfigure(sizeInPixels: seamlessDisplaySize())
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, self.seamless.isEnabled, let display = self.guestDisplay else { return }
+            self.displayView?.automaticallyReconfiguresDisplay = false
+            let size = self.seamlessDisplaySize()
+            guard display.sizeInPixels != size else { return }
             try? display.reconfigure(sizeInPixels: size)
         }
     }
