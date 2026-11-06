@@ -4,6 +4,11 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>th</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>th</string>
+		<string>en</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>LinMO</string>
 	<key>CFBundleExecutable</key>

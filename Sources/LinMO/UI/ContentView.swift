@@ -70,6 +70,7 @@ private struct MachineRow: View {
 }
 
 private struct EmptyLibraryView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     let hasMachines: Bool
     let onCreate: () -> Void
 

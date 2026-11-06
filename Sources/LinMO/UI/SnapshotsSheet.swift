@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SnapshotsSheet: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     @ObservedObject var machine: MachineController
     @Environment(\.dismiss) private var dismiss
 
