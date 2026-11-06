@@ -184,6 +184,24 @@ if [ -n "$MAIN_USER" ] && [ -d "$MAIN_HOME" ] && [ ! -e "$MAIN_HOME/MacDrives" ]
     ln -s /mnt/linmo-drives "$MAIN_HOME/MacDrives"
     chown -h "$MAIN_USER:" "$MAIN_HOME/MacDrives" 2>/dev/null || true
 fi
+if [ -n "$MAIN_USER" ] && [ -d "$MAIN_HOME" ]; then
+    BOOKMARKS="$MAIN_HOME/.config/gtk-3.0/bookmarks"
+    if [ ! -d "$MAIN_HOME/.config/gtk-3.0" ]; then
+        mkdir -p "$MAIN_HOME/.config/gtk-3.0"
+        chown "$MAIN_USER:" "$MAIN_HOME/.config" "$MAIN_HOME/.config/gtk-3.0" 2>/dev/null || true
+    fi
+    for NAME in MacDrives MacFolders; do
+        if [ -e "$MAIN_HOME/$NAME" ] && ! grep -qs "^file://$MAIN_HOME/$NAME\( \|$\)" "$BOOKMARKS"; then
+            echo "file://$MAIN_HOME/$NAME $NAME" >> "$BOOKMARKS"
+        fi
+    done
+    [ -f "$BOOKMARKS" ] && chown "$MAIN_USER:" "$BOOKMARKS" 2>/dev/null || true
+fi
+cat > /etc/udev/rules.d/90-linmo-hide-disks.rules <<'RULES'
+ENV{ID_FS_LABEL}=="cidata|CIDATA|linmotools|LINMOTOOLS", ENV{UDISKS_IGNORE}="1"
+RULES
+udevadm control --reload 2>/dev/null || true
+udevadm trigger --subsystem-match=block 2>/dev/null || true
 
 echo "▶ ตั้งค่าส่งต่อพอร์ตและ SSH มาที่ Mac…"
 install -m 0755 "$DIR/linmo-ports.py" /usr/local/lib/linmo/linmo-ports.py
