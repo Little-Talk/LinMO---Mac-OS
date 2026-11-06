@@ -539,7 +539,7 @@ final class FilePromiseWriter: NSObject, NSFilePromiseProviderDelegate {
     func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL,
                              completionHandler: @escaping (Error?) -> Void) {
         guard let file = filePromiseProvider.userInfo as? SeamlessSession.DraggedFile else {
-            completionHandler(LinMOError.message("ไม่พบข้อมูลไฟล์"))
+            completionHandler(LinMOError.message(tr("ไม่พบข้อมูลไฟล์", "No file data found")))
             return
         }
         do {

@@ -59,7 +59,7 @@ final class MachineLibrary: ObservableObject {
         guard controller.state == .stopped, !controller.isSuspended else { return nil }
         var config = controller.config
         config.id = UUID()
-        config.name = controller.config.name + " (สำเนา)"
+        config.name = controller.config.name + tr(" (สำเนา)", " (copy)")
         config.createdAt = Date()
         config.sshPort = nil
         do {
@@ -68,7 +68,7 @@ final class MachineLibrary: ObservableObject {
             machines.append(copy)
             return copy
         } catch {
-            errorMessage = "ทำสำเนาเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ทำสำเนาเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not duplicate the machine: \(error.localizedDescription)")
             return nil
         }
     }
@@ -80,7 +80,7 @@ final class MachineLibrary: ObservableObject {
             machines.removeAll { $0.id == controller.id }
             LinuxAppCatalog.shared.removeMachine(controller.id)
         } catch {
-            errorMessage = "ลบเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ลบเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not delete the machine: \(error.localizedDescription)")
         }
     }
 
@@ -114,7 +114,7 @@ final class MachineLibrary: ObservableObject {
             try bundle.save(config)
             try? fm.removeItem(at: newURL.appendingPathComponent("settings.json"))
         } catch {
-            errorMessage = "ย้ายเครื่องจากเวอร์ชันเก่าไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ย้ายเครื่องจากเวอร์ชันเก่าไม่สำเร็จ: \(error.localizedDescription)", "Could not migrate machines from the old version: \(error.localizedDescription)")
         }
     }
 }

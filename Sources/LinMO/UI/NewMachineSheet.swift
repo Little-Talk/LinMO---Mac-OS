@@ -72,7 +72,7 @@ struct NewMachineSheet: View {
 
     private var chooseSourceView: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("เลือก Linux ที่จะติดตั้ง")
+            Text(tr("เลือก Linux ที่จะติดตั้ง", "Choose a Linux to install"))
                 .font(.title2.bold())
 
             ForEach(DistroCatalog.all) { distro in
@@ -80,8 +80,8 @@ struct NewMachineSheet: View {
                     title: distro.name,
                     subtitle: distro.summary,
                     detail: ImageStore.cachedDisk(for: distro) != nil
-                        ? "ดาวน์โหลดไว้แล้ว — สร้างได้ทันที"
-                        : "ติดตั้งอัตโนมัติ · ดาวน์โหลดประมาณ \(distro.approximateDownloadMB) MB",
+                        ? tr("ดาวน์โหลดไว้แล้ว — สร้างได้ทันที", "Already downloaded. Ready to create right away")
+                        : tr("ติดตั้งอัตโนมัติ · ดาวน์โหลดประมาณ \(distro.approximateDownloadMB) MB", "Automatic install · about \(distro.approximateDownloadMB) MB download"),
                     systemImage: "sparkles",
                     isSelected: source == .distro(distro)
                 ) {
@@ -92,9 +92,9 @@ struct NewMachineSheet: View {
             }
 
             SourceCard(
-                title: "ติดตั้งเองจากไฟล์ ISO หรือ IMG",
-                subtitle: "ใช้ไฟล์ติดตั้ง หรือไฟล์ดิสก์ .img ARM64 ของ distro ไหนก็ได้ เช่น Ubuntu, Fedora, Armbian",
-                detail: "สำหรับผู้ที่คุ้นเคย ต้องกดติดตั้งเองตามขั้นตอนของ distro",
+                title: tr("ติดตั้งเองจากไฟล์ ISO หรือ IMG", "Install from an ISO or IMG file"),
+                subtitle: tr("ใช้ไฟล์ติดตั้ง หรือไฟล์ดิสก์ .img ARM64 ของ distro ไหนก็ได้ เช่น Ubuntu, Fedora, Armbian", "Use an ARM64 installer or .img disk file from any distro, such as Ubuntu, Fedora or Armbian"),
+                detail: tr("สำหรับผู้ที่คุ้นเคย ต้องกดติดตั้งเองตามขั้นตอนของ distro", "For experienced users. You go through the distro installer yourself"),
                 systemImage: "opticaldisc",
                 isSelected: source == .customISO
             ) {
@@ -115,32 +115,32 @@ struct NewMachineSheet: View {
                         PresetRow(preset: option, isSelected: preset == option) { choose(option) }
                     }
                 } header: {
-                    Text("ชุดโปรแกรม")
+                    Text(tr("ชุดโปรแกรม", "Software set"))
                 } footer: {
                     if preset != .basic {
-                        Text("ติดตั้งระหว่างตั้งค่าครั้งแรก ใช้เวลาและเน็ตเพิ่มขึ้น — โปรแกรมที่ distro นี้ไม่มีจะถูกข้ามไป")
+                        Text(tr("ติดตั้งระหว่างตั้งค่าครั้งแรก ใช้เวลาและเน็ตเพิ่มขึ้น — โปรแกรมที่ distro นี้ไม่มีจะถูกข้ามไป", "Installed during first-time setup, which takes more time and data. Programs this distro lacks are skipped."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
 
-            Section("เครื่อง") {
-                TextField("ชื่อเครื่อง", text: $name)
-                Stepper("CPU: \(cpuCount) คอร์", value: $cpuCount, in: 1...max(1, maxCPU))
+            Section(tr("เครื่อง", "Machine")) {
+                TextField(tr("ชื่อเครื่อง", "Machine name"), text: $name)
+                Stepper(tr("CPU: \(cpuCount) คอร์", "CPU: \(cpuCount) cores"), value: $cpuCount, in: 1...max(1, maxCPU))
                 Stepper("RAM: \(memoryGB) GB", value: $memoryGB, in: 2...maxMemoryGB)
-                Stepper("ดิสก์: \(diskGB) GB", value: $diskGB, in: 16...1024, step: 8)
+                Stepper(tr("ดิสก์: \(diskGB) GB", "Disk: \(diskGB) GB"), value: $diskGB, in: 16...1024, step: 8)
             }
 
             if source == .customISO {
-                Section("ไฟล์ติดตั้ง") {
-                    LabeledContent("ไฟล์ ISO / IMG (ARM64)") {
+                Section(tr("ไฟล์ติดตั้ง", "Installer file")) {
+                    LabeledContent(tr("ไฟล์ ISO / IMG (ARM64)", "ISO / IMG file (ARM64)")) {
                         HStack {
-                            Text(isoPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "ยังไม่ได้เลือก")
+                            Text(isoPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? tr("ยังไม่ได้เลือก", "None selected"))
                                 .foregroundStyle(isoPath == nil ? .secondary : .primary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
-                            Button("เลือกไฟล์…") { showingISOPicker = true }
+                            Button(tr("เลือกไฟล์…", "Choose File…")) { showingISOPicker = true }
                         }
                     }
                     .fileImporter(
@@ -158,18 +158,18 @@ struct NewMachineSheet: View {
                     }
                     if isoPath != nil {
                         if isoKind == .qcow2 {
-                            Text("ไฟล์ qcow2 จะถูกแปลงเป็นดิสก์ของเครื่อง แล้วบูตจากดิสก์นั้นเลย")
+                            Text(tr("ไฟล์ qcow2 จะถูกแปลงเป็นดิสก์ของเครื่อง แล้วบูตจากดิสก์นั้นเลย", "The qcow2 file is converted into the machine disk and the machine boots from it"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         } else if isoKind == .raw || isoPath.map({ URL(fileURLWithPath: $0).pathExtension.lowercased() != "iso" }) == true {
-                            Picker("ใช้ไฟล์นี้เป็น", selection: $useImageAsDisk) {
-                                Text("แผ่นติดตั้ง (เหมือน ISO)").tag(false)
-                                Text("ดิสก์ของเครื่อง (บูตได้เลย)").tag(true)
+                            Picker(tr("ใช้ไฟล์นี้เป็น", "Use this file as"), selection: $useImageAsDisk) {
+                                Text(tr("แผ่นติดตั้ง (เหมือน ISO)", "Installer disc (like an ISO)")).tag(false)
+                                Text(tr("ดิสก์ของเครื่อง (บูตได้เลย)", "Machine disk (boots directly)")).tag(true)
                             }
                             .pickerStyle(.radioGroup)
                             Text(useImageAsDisk
-                                 ? "คัดลอกไฟล์เป็นดิสก์ของเครื่องแล้วขยายเป็น \(diskGB) GB ไฟล์ต้นฉบับไม่ถูกแก้ ใช้กับไฟล์ดิสก์ที่บูตด้วย UEFI ได้ เช่น Armbian, Debian raw"
-                                 : "ต่อไฟล์เข้าเครื่องเป็น USB แบบอ่านอย่างเดียว ใช้กับไฟล์ติดตั้งแบบ live USB")
+                                 ? tr("คัดลอกไฟล์เป็นดิสก์ของเครื่องแล้วขยายเป็น \(diskGB) GB ไฟล์ต้นฉบับไม่ถูกแก้ ใช้กับไฟล์ดิสก์ที่บูตด้วย UEFI ได้ เช่น Armbian, Debian raw", "Copies the file as the machine disk and grows it to \(diskGB) GB. The original file is not changed. Works with UEFI-bootable disk files such as Armbian or Debian raw")
+                                 : tr("ต่อไฟล์เข้าเครื่องเป็น USB แบบอ่านอย่างเดียว ใช้กับไฟล์ติดตั้งแบบ live USB", "Attaches the file as a read-only USB drive. Use this for live USB installers"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -177,8 +177,8 @@ struct NewMachineSheet: View {
                 }
             } else {
                 if case .distro(let distro) = source, distro.desktops.count > 1 {
-                    Section("หน้าจอ desktop") {
-                        Picker("หน้าจอ desktop", selection: $desktop) {
+                    Section(tr("หน้าจอ desktop", "Desktop")) {
+                        Picker(tr("หน้าจอ desktop", "Desktop"), selection: $desktop) {
                             ForEach(distro.desktops) { option in
                                 Text(option.title).tag(option)
                             }
@@ -188,49 +188,49 @@ struct NewMachineSheet: View {
                     }
                 }
 
-                Section("บัญชีผู้ใช้ใน Linux") {
-                    TextField("ชื่อผู้ใช้ (ภาษาอังกฤษตัวเล็ก)", text: $username)
+                Section(tr("บัญชีผู้ใช้ใน Linux", "Linux user account")) {
+                    TextField(tr("ชื่อผู้ใช้ (ภาษาอังกฤษตัวเล็ก)", "Username (lowercase English)"), text: $username)
                     if !username.isEmpty && !GuestSetupOptions.isValidUsername(username) {
-                        Text("ใช้ได้เฉพาะ a-z, 0-9, _ และ - และต้องขึ้นต้นด้วยตัวอักษร")
+                        Text(tr("ใช้ได้เฉพาะ a-z, 0-9, _ และ - และต้องขึ้นต้นด้วยตัวอักษร", "Only a-z, 0-9, _ and - are allowed, and it must start with a letter"))
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
-                    SecureField("รหัสผ่าน", text: $password)
-                    SecureField("ยืนยันรหัสผ่าน", text: $confirmPassword)
+                    SecureField(tr("รหัสผ่าน", "Password"), text: $password)
+                    SecureField(tr("ยืนยันรหัสผ่าน", "Confirm password"), text: $confirmPassword)
                     if !confirmPassword.isEmpty && password != confirmPassword {
-                        Text("รหัสผ่านไม่ตรงกัน")
+                        Text(tr("รหัสผ่านไม่ตรงกัน", "Passwords do not match"))
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
-                    Toggle("เข้าระบบอัตโนมัติ (ไม่ต้องใส่รหัสตอนเปิดเครื่อง)", isOn: $autologin)
+                    Toggle(tr("เข้าระบบอัตโนมัติ (ไม่ต้องใส่รหัสตอนเปิดเครื่อง)", "Log in automatically (no password at startup)"), isOn: $autologin)
                 }
 
-                Section("ภาษาไทย") {
+                Section(tr("ภาษาไทย", "Thai language")) {
                     Toggle(
                         desktop == .gnome
-                            ? "คีย์บอร์ดไทย (สลับภาษาด้วย Cmd + Space)"
-                            : "คีย์บอร์ดไทย (สลับภาษาด้วย Option + Shift)",
+                            ? tr("คีย์บอร์ดไทย (สลับภาษาด้วย Cmd + Space)", "Thai keyboard (switch with Cmd + Space)")
+                            : tr("คีย์บอร์ดไทย (สลับภาษาด้วย Option + Shift)", "Thai keyboard (switch with Option + Shift)"),
                         isOn: $thaiKeyboard
                     )
-                    Toggle("เมนูภาษาไทย", isOn: $thaiInterface)
-                    Text("ฟอนต์ไทยติดตั้งให้เสมอ")
+                    Toggle(tr("เมนูภาษาไทย", "Thai menus in Linux"), isOn: $thaiInterface)
+                    Text(tr("ฟอนต์ไทยติดตั้งให้เสมอ", "Thai fonts are always installed"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section("เชื่อมกับ Mac") {
-                LabeledContent("โฟลเดอร์แชร์") {
+            Section(tr("เชื่อมกับ Mac", "Connect with the Mac")) {
+                LabeledContent(tr("โฟลเดอร์แชร์", "Shared folder")) {
                     HStack {
-                        Text(sharedFolderPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "ไม่แชร์")
+                        Text(sharedFolderPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? tr("ไม่แชร์", "Not shared"))
                             .foregroundStyle(sharedFolderPath == nil ? .secondary : .primary)
                         if sharedFolderPath != nil {
-                            Button("ยกเลิก") {
+                            Button(tr("ยกเลิก", "Cancel")) {
                                 sharedFolderPath = nil
                                 sharedFolderBookmark = nil
                             }
                         }
-                        Button("เลือก…") { showingFolderPicker = true }
+                        Button(tr("เลือก…", "Choose…")) { showingFolderPicker = true }
                     }
                 }
                 .fileImporter(isPresented: $showingFolderPicker, allowedContentTypes: [.folder]) { result in
@@ -240,15 +240,15 @@ struct NewMachineSheet: View {
                     }
                 }
                 if source != .customISO {
-                    Text("ใน Linux จะเห็นโฟลเดอร์นี้ที่ ~/Mac")
+                    Text(tr("ใน Linux จะเห็นโฟลเดอร์นี้ที่ ~/Mac", "In Linux this folder appears at ~/Mac"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 if rosettaAvailability != .notSupported {
-                    Toggle("รันโปรแกรม x86_64 ผ่าน Rosetta", isOn: $rosetta)
+                    Toggle(tr("รันโปรแกรม x86_64 ผ่าน Rosetta", "Run x86_64 programs with Rosetta"), isOn: $rosetta)
                     if rosetta && rosettaAvailability == .notInstalled {
-                        Text("macOS จะขอติดตั้ง Rosetta ก่อนสร้างเครื่อง")
+                        Text(tr("macOS จะขอติดตั้ง Rosetta ก่อนสร้างเครื่อง", "macOS will ask to install Rosetta before creating the machine"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -267,9 +267,9 @@ struct NewMachineSheet: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 56))
                     .foregroundStyle(.green)
-                Text("สร้างเครื่องเสร็จแล้ว")
+                Text(tr("สร้างเครื่องเสร็จแล้ว", "Machine created"))
                     .font(.title2.bold())
-                Text("กด \"เปิดเครื่อง\" ได้เลย ครั้งแรก Linux จะติดตั้งหน้าจอและภาษาไทยเอง ใช้เวลาประมาณ 10–30 นาที (ต้องต่ออินเทอร์เน็ต) ดูความคืบหน้าได้ที่แถบด้านล่างของหน้าจอ เสร็จแล้วจะเข้าหน้าจอ desktop ให้อัตโนมัติ")
+                Text(tr("กด \"เปิดเครื่อง\" ได้เลย ครั้งแรก Linux จะติดตั้งหน้าจอและภาษาไทยเอง ใช้เวลาประมาณ 10–30 นาที (ต้องต่ออินเทอร์เน็ต) ดูความคืบหน้าได้ที่แถบด้านล่างของหน้าจอ เสร็จแล้วจะเข้าหน้าจอ desktop ให้อัตโนมัติ", "Click \"Start\". The first time, Linux sets up the desktop and language by itself, which takes about 10–30 minutes (internet required). Progress shows in the bar at the bottom of the screen, and the desktop opens automatically when it is done."))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: 440)
@@ -301,23 +301,23 @@ struct NewMachineSheet: View {
         HStack {
             switch step {
             case .chooseSource:
-                Button("ยกเลิก") { dismiss() }
+                Button(tr("ยกเลิก", "Cancel")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("ถัดไป") { step = .configure }
+                Button(tr("ถัดไป", "Next")) { step = .configure }
                     .keyboardShortcut(.defaultAction)
 
             case .configure:
-                Button("ย้อนกลับ") { step = .chooseSource }
+                Button(tr("ย้อนกลับ", "Back")) { step = .chooseSource }
                     .disabled(importingDisk)
                 Spacer()
                 if importingDisk {
                     ProgressView().controlSize(.small)
-                    Text("กำลังเตรียมดิสก์…")
+                    Text(tr("กำลังเตรียมดิสก์…", "Preparing the disk…"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Button(source == .customISO ? "สร้างเครื่อง" : "ติดตั้ง") { create() }
+                Button(source == .customISO ? tr("สร้างเครื่อง", "Create Machine") : tr("ติดตั้ง", "Install")) { create() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canCreate || importingDisk)
 
@@ -325,17 +325,17 @@ struct NewMachineSheet: View {
                 switch provisioner.phase {
                 case .finished:
                     Spacer()
-                    Button("เสร็จ") { finish(start: false) }
-                    Button("เปิดเครื่อง") { finish(start: true) }
+                    Button(tr("เสร็จ", "Done")) { finish(start: false) }
+                    Button(tr("เปิดเครื่อง", "Start")) { finish(start: true) }
                         .keyboardShortcut(.defaultAction)
                 case .failed:
-                    Button("ปิด") { dismiss() }
+                    Button(tr("ปิด", "Close")) { dismiss() }
                     Spacer()
-                    Button("ย้อนกลับไปแก้ไข") { step = .configure }
+                    Button(tr("ย้อนกลับไปแก้ไข", "Go Back and Edit")) { step = .configure }
                         .keyboardShortcut(.defaultAction)
                 default:
                     Spacer()
-                    Text("ปิดหน้าต่างนี้ไม่ได้ระหว่างติดตั้ง")
+                    Text(tr("ปิดหน้าต่างนี้ไม่ได้ระหว่างติดตั้ง", "This window cannot be closed during installation"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -390,7 +390,7 @@ struct NewMachineSheet: View {
                         onCreated(controller)
                         dismiss()
                     case .failure(let error):
-                        errorMessage = "สร้างเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                        errorMessage = tr("สร้างเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not create the machine: \(error.localizedDescription)")
                     }
                 }
                 return
@@ -404,7 +404,7 @@ struct NewMachineSheet: View {
                 onCreated(controller)
                 dismiss()
             } catch {
-                errorMessage = "สร้างเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                errorMessage = tr("สร้างเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not create the machine: \(error.localizedDescription)")
             }
 
         case .distro(let distro):

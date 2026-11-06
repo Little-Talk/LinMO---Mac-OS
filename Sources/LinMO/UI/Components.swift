@@ -18,11 +18,11 @@ struct StatusBadge: View {
 
     private var label: String {
         switch state {
-        case .stopped: return suspended ? "พักอยู่" : "ปิดอยู่"
-        case .starting: return "กำลังเปิด…"
-        case .running: return "ทำงานอยู่"
-        case .suspending: return "กำลังพักเครื่อง…"
-        case .stopping: return "กำลังปิด…"
+        case .stopped: return suspended ? tr("พักอยู่", "Suspended") : tr("ปิดอยู่", "Stopped")
+        case .starting: return tr("กำลังเปิด…", "Starting…")
+        case .running: return tr("ทำงานอยู่", "Running")
+        case .suspending: return tr("กำลังพักเครื่อง…", "Suspending…")
+        case .stopping: return tr("กำลังปิด…", "Shutting down…")
         }
     }
 
@@ -60,13 +60,13 @@ struct ErrorAlert: ViewModifier {
 
     func body(content: Content) -> some View {
         content.alert(
-            "เกิดข้อผิดพลาด",
+            tr("เกิดข้อผิดพลาด", "Something went wrong"),
             isPresented: Binding(
                 get: { message != nil },
                 set: { if !$0 { message = nil } }
             )
         ) {
-            Button("ตกลง", role: .cancel) {}
+            Button(tr("ตกลง", "OK"), role: .cancel) {}
         } message: {
             Text(message ?? "")
         }
@@ -128,23 +128,23 @@ struct SetupProgressBanner: View {
 
     private var title: String {
         if status.finished && status.errors > 0 {
-            return "ตั้งค่าเสร็จ แต่มี \(status.errors) ขั้นตอนที่ไม่สำเร็จ"
+            return tr("ตั้งค่าเสร็จ แต่มี \(status.errors) ขั้นตอนที่ไม่สำเร็จ", "Setup finished, but \(status.errors) steps failed")
         }
         if status.finished {
-            return "ตั้งค่าเสร็จแล้ว กำลังรีบูตเข้าหน้าจอ desktop…"
+            return tr("ตั้งค่าเสร็จแล้ว กำลังรีบูตเข้าหน้าจอ desktop…", "Setup finished. Restarting into the desktop…")
         }
         if let progress = status.progress {
-            return "กำลังตั้งค่าครั้งแรก… \(Int(progress * 100))%"
+            return tr("กำลังตั้งค่าครั้งแรก… \(Int(progress * 100))%", "First-time setup… \(Int(progress * 100))%")
         }
-        return "กำลังตั้งค่าครั้งแรก…"
+        return tr("กำลังตั้งค่าครั้งแรก…", "First-time setup…")
     }
 
     private var subtitle: String {
         if status.finished && status.errors > 0 {
-            return "ดูรายละเอียดใน Linux ที่ /var/log/cloud-init-output.log"
+            return tr("ดูรายละเอียดใน Linux ที่ /var/log/cloud-init-output.log", "See details in Linux at /var/log/cloud-init-output.log")
         }
         if status.finished {
-            return "ขั้นตอนนี้ทำแค่ครั้งเดียว"
+            return tr("ขั้นตอนนี้ทำแค่ครั้งเดียว", "This only happens once")
         }
         return status.line
     }

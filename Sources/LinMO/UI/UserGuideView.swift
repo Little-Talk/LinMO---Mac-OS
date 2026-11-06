@@ -1,25 +1,7 @@
 import AppKit
 import SwiftUI
 
-enum GuideLanguage: String, CaseIterable, Identifiable {
-    case thai = "th"
-    case english = "en"
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .thai: "ไทย"
-        case .english: "English"
-        }
-    }
-
-    static var systemDefault: GuideLanguage {
-        let preferred = Locale.preferredLanguages.first ?? ""
-        return preferred.hasPrefix("th") ? .thai : .english
-    }
-
-}
+typealias GuideLanguage = AppLanguage
 
 struct GuideText {
     let th: String
@@ -56,10 +38,11 @@ struct GuideTopic: Identifiable, Hashable {
 
 struct UserGuideCommands: Commands {
     @Environment(\.openWindow) private var openWindow
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
 
     var body: some Commands {
         CommandGroup(replacing: .help) {
-            Button(GuideLanguage.systemDefault == .thai ? "วิธีใช้ LinMO" : "LinMO Help") {
+            Button(appLanguageRaw == AppLanguage.english.rawValue ? "LinMO Help" : "วิธีใช้ LinMO") {
                 openWindow(id: "guide")
             }
             .keyboardShortcut("?", modifiers: .command)
@@ -68,7 +51,7 @@ struct UserGuideCommands: Commands {
 }
 
 struct UserGuideView: View {
-    @AppStorage("guideLanguage") private var languageRaw = GuideLanguage.systemDefault.rawValue
+    @AppStorage(AppLanguage.guideStorageKey) private var languageRaw = AppLanguage.current.rawValue
     @State private var selection: String? = UserGuide.topics.first?.id
 
     private var language: GuideLanguage {
