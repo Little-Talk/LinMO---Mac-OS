@@ -37,7 +37,7 @@ def check(name, ok):
 
 msgs = recv(lambda m: m[0] == 5)
 check("hello", any(m[0] == 1 and "wayland" in m[1]["features"] for m in msgs))
-cenv = dict(env, WAYLAND_DISPLAY="linmo-0", LANG="C.UTF-8")
+cenv = dict(env, WAYLAND_DISPLAY="wayland-1", LANG="C.UTF-8")
 target = os.path.join(work, "typed.txt")
 foot = subprocess.Popen(["foot", "sh"], env=cenv, stderr=subprocess.DEVNULL)
 msgs = recv(lambda m: m[0] == 2, timeout=10)
