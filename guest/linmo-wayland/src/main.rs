@@ -32,13 +32,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let port: u32 = std::env::var("LINMO_WAYLAND_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(DEFAULT_PORT);
-    let socket_name = std::env::var("LINMO_WAYLAND_DISPLAY").unwrap_or_else(|_| "linmo-0".into());
 
     let mut event_loop: EventLoop<State> = EventLoop::try_new()?;
     let display: Display<State> = Display::new()?;
     let dh = display.handle();
 
-    let listening = ListeningSocketSource::with_name(&socket_name)?;
+    let listening = match std::env::var("LINMO_WAYLAND_DISPLAY") {
+        Ok(name) => ListeningSocketSource::with_name(&name)?,
+        Err(_) => ListeningSocketSource::new_auto()?,
+    };
+    let socket_name = listening.socket_name().to_string_lossy().into_owned();
     event_loop.handle().insert_source(listening, |stream, _, state| {
         if let Err(error) = state.dh.insert_client(stream, Arc::new(ClientState::default())) {
             tracing::warn!("client rejected: {error}");

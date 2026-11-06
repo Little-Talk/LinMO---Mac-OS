@@ -103,7 +103,7 @@ svg_png = base64.b64decode(svg_app.get("icon", "")) if svg_app.get("icon") else 
 check("SVG app icon → PNG in app list", svg_app.get("iconFormat") == "png" and svg_png.startswith(b"\x89PNG")
       and struct.unpack(">II", svg_png[16:24]) == (128, 128))
 
-cenv = dict(env, WAYLAND_DISPLAY="linmo-0", GDK_BACKEND="wayland", LANG="C.UTF-8", NO_AT_BRIDGE="1")
+cenv = dict(env, WAYLAND_DISPLAY="wayland-1", GDK_BACKEND="wayland", LANG="C.UTF-8", NO_AT_BRIDGE="1")
 app = subprocess.Popen([sys.executable, client_script], env=cenv, stdin=subprocess.PIPE,
                        stdout=subprocess.PIPE, text=True, bufsize=1)
 threading.Thread(target=lambda: [lines.append(l) for l in app.stdout], daemon=True).start()
