@@ -167,36 +167,32 @@ echo "▶ ตั้งค่าโฟลเดอร์แชร์เพิ่�
 mkdir -p /mnt/linmo-extra
 grep -q '^linmo-extra ' /etc/fstab || echo 'linmo-extra /mnt/linmo-extra virtiofs rw,nofail 0 0' >> /etc/fstab
 mountpoint -q /mnt/linmo-extra || mount /mnt/linmo-extra 2>/dev/null || true
-MAIN_USER="$(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 { print $1; exit }')"
-if [ -n "$MAIN_USER" ]; then
-    MAIN_HOME="$(getent passwd "$MAIN_USER" | cut -d: -f6)"
-    if [ -d "$MAIN_HOME" ] && [ ! -e "$MAIN_HOME/MacFolders" ] && [ ! -L "$MAIN_HOME/MacFolders" ]; then
-        ln -s /mnt/linmo-extra "$MAIN_HOME/MacFolders"
-        chown -h "$MAIN_USER:" "$MAIN_HOME/MacFolders" 2>/dev/null || true
-    fi
-fi
 
 echo "▶ ตั้งค่าฮาร์ดดิสก์ภายนอกของ Mac…"
 mkdir -p /mnt/linmo-drives
 grep -q '^linmo-drives ' /etc/fstab || echo 'linmo-drives /mnt/linmo-drives virtiofs rw,nofail 0 0' >> /etc/fstab
 mountpoint -q /mnt/linmo-drives || mount /mnt/linmo-drives 2>/dev/null || true
-if [ -n "$MAIN_USER" ] && [ -d "$MAIN_HOME" ] && [ ! -e "$MAIN_HOME/MacDrives" ] && [ ! -L "$MAIN_HOME/MacDrives" ]; then
-    ln -s /mnt/linmo-drives "$MAIN_HOME/MacDrives"
-    chown -h "$MAIN_USER:" "$MAIN_HOME/MacDrives" 2>/dev/null || true
-fi
-if [ -n "$MAIN_USER" ] && [ -d "$MAIN_HOME" ]; then
-    BOOKMARKS="$MAIN_HOME/.config/gtk-3.0/bookmarks"
-    if [ ! -d "$MAIN_HOME/.config/gtk-3.0" ]; then
-        mkdir -p "$MAIN_HOME/.config/gtk-3.0"
-        chown "$MAIN_USER:" "$MAIN_HOME/.config" "$MAIN_HOME/.config/gtk-3.0" 2>/dev/null || true
-    fi
-    for NAME in MacDrives MacFolders; do
-        if [ -e "$MAIN_HOME/$NAME" ] && ! grep -qs "^file://$MAIN_HOME/$NAME\( \|$\)" "$BOOKMARKS"; then
-            echo "file://$MAIN_HOME/$NAME $NAME" >> "$BOOKMARKS"
+getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 { print $1 ":" $6 }' | while IFS=: read -r LINUX_USER LINUX_HOME; do
+    [ -d "$LINUX_HOME" ] || continue
+    for LINK in MacFolders:/mnt/linmo-extra MacDrives:/mnt/linmo-drives; do
+        NAME="${LINK%%:*}"
+        if [ ! -e "$LINUX_HOME/$NAME" ] && [ ! -L "$LINUX_HOME/$NAME" ]; then
+            ln -s "${LINK#*:}" "$LINUX_HOME/$NAME"
+            chown -h "$LINUX_USER:" "$LINUX_HOME/$NAME" 2>/dev/null || true
         fi
     done
-    [ -f "$BOOKMARKS" ] && chown "$MAIN_USER:" "$BOOKMARKS" 2>/dev/null || true
-fi
+    BOOKMARKS="$LINUX_HOME/.config/gtk-3.0/bookmarks"
+    if [ ! -d "$LINUX_HOME/.config/gtk-3.0" ]; then
+        mkdir -p "$LINUX_HOME/.config/gtk-3.0"
+        chown "$LINUX_USER:" "$LINUX_HOME/.config" "$LINUX_HOME/.config/gtk-3.0" 2>/dev/null || true
+    fi
+    for NAME in MacDrives MacFolders; do
+        if [ -e "$LINUX_HOME/$NAME" ] && ! grep -qs "^file://$LINUX_HOME/$NAME\( \|$\)" "$BOOKMARKS"; then
+            echo "file://$LINUX_HOME/$NAME $NAME" >> "$BOOKMARKS"
+        fi
+    done
+    [ -f "$BOOKMARKS" ] && chown "$LINUX_USER:" "$BOOKMARKS" 2>/dev/null || true
+done
 cat > /etc/udev/rules.d/90-linmo-hide-disks.rules <<'RULES'
 ENV{ID_FS_LABEL}=="cidata|CIDATA|linmotools|LINMOTOOLS", ENV{UDISKS_IGNORE}="1"
 RULES
