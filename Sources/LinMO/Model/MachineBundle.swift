@@ -25,6 +25,16 @@ struct MachineBundle {
     var cloudInitSeedURL: URL { url.appendingPathComponent("CloudInit.iso") }
     var snapshotsURL: URL { url.appendingPathComponent("Snapshots", isDirectory: true) }
     var savedStateURL: URL { url.appendingPathComponent("SavedState.vzvmsave") }
+    var lockURL: URL { url.appendingPathComponent("Machine.lock") }
+
+    func acquireLock() throws -> MachineLock {
+        try MachineLock(url: lockURL)
+    }
+
+    private func exclusively<T>(_ body: () throws -> T) throws -> T {
+        let lock = try acquireLock()
+        return try withExtendedLifetime(lock) { try body() }
+    }
 
     var hasSavedState: Bool {
         FileManager.default.fileExists(atPath: savedStateURL.path)
@@ -112,6 +122,10 @@ struct MachineBundle {
     }
 
     func growDisk(toGB gb: Int) throws {
+        try exclusively { try growDiskUnlocked(toGB: gb) }
+    }
+
+    private func growDiskUnlocked(toGB gb: Int) throws {
         let target = UInt64(gb) * 1024 * 1024 * 1024
         let handle = try FileHandle(forWritingTo: diskURL)
         defer { try? handle.close() }
@@ -122,6 +136,10 @@ struct MachineBundle {
     }
 
     func clone(as config: MachineConfig) throws -> MachineBundle {
+        try exclusively { try cloneUnlocked(as: config) }
+    }
+
+    private func cloneUnlocked(as config: MachineConfig) throws -> MachineBundle {
         let fm = FileManager.default
         let target = MachineBundle(url: Self.url(for: config.id))
         try fm.createDirectory(at: target.url, withIntermediateDirectories: true)
@@ -139,7 +157,7 @@ struct MachineBundle {
     }
 
     func delete() throws {
-        try FileManager.default.removeItem(at: url)
+        try exclusively { try FileManager.default.removeItem(at: url) }
     }
 
 
@@ -162,6 +180,10 @@ struct MachineBundle {
     }
 
     func createSnapshot(named name: String) throws -> Snapshot {
+        try exclusively { try createSnapshotUnlocked(named: name) }
+    }
+
+    private func createSnapshotUnlocked(named name: String) throws -> Snapshot {
         let fm = FileManager.default
         let snapshot = Snapshot(name: name)
         let dir = snapshotDirectory(snapshot.id)
@@ -180,6 +202,10 @@ struct MachineBundle {
     }
 
     func restoreSnapshot(_ snapshot: Snapshot) throws {
+        try exclusively { try restoreSnapshotUnlocked(snapshot) }
+    }
+
+    private func restoreSnapshotUnlocked(_ snapshot: Snapshot) throws {
         let fm = FileManager.default
         let dir = snapshotDirectory(snapshot.id)
         let savedDisk = dir.appendingPathComponent("Disk.img")
