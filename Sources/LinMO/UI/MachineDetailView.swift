@@ -29,15 +29,15 @@ struct MachineDetailView: View {
         .sheet(isPresented: $showingExtraFolders) {
             ExtraFoldersSheet(machine: machine)
         }
-        .confirmationDialog("ลบ \"\(machine.config.name)\" ทิ้ง?", isPresented: $confirmingDelete) {
-            Button("ลบถาวร", role: .destructive) { library.delete(machine) }
+        .confirmationDialog(tr("ลบ \"\(machine.config.name)\" ทิ้ง?", "Delete \"\(machine.config.name)\"?"), isPresented: $confirmingDelete) {
+            Button(tr("ลบถาวร", "Delete Permanently"), role: .destructive) { library.delete(machine) }
         } message: {
-            Text("ไฟล์ โปรแกรม และ snapshot ทั้งหมดของเครื่องนี้จะหายไปและกู้คืนไม่ได้")
+            Text(tr("ไฟล์ โปรแกรม และ snapshot ทั้งหมดของเครื่องนี้จะหายไปและกู้คืนไม่ได้", "All files, programs and snapshots of this machine will be removed and cannot be recovered."))
         }
-        .confirmationDialog("ทิ้งสถานะที่พักไว้?", isPresented: $confirmingDiscard) {
-            Button("ทิ้งแล้วเปิดใหม่ครั้งหน้า", role: .destructive) { machine.discardSuspendedState() }
+        .confirmationDialog(tr("ทิ้งสถานะที่พักไว้?", "Discard the suspended state?"), isPresented: $confirmingDiscard) {
+            Button(tr("ทิ้งแล้วเปิดใหม่ครั้งหน้า", "Discard and Start Fresh Next Time"), role: .destructive) { machine.discardSuspendedState() }
         } message: {
-            Text("แอพและไฟล์ที่เปิดค้างไว้ใน Linux จะหายไป เหมือนถอดปลั๊กเครื่อง งานที่ยังไม่บันทึกจะหาย")
+            Text(tr("แอพและไฟล์ที่เปิดค้างไว้ใน Linux จะหายไป เหมือนถอดปลั๊กเครื่อง งานที่ยังไม่บันทึกจะหาย", "Apps and files left open in Linux will be lost, like pulling the plug. Unsaved work will be lost."))
         }
         .errorAlert($machine.errorMessage)
     }
@@ -51,10 +51,10 @@ struct MachineDetailView: View {
 
             if machine.state == .stopped {
                 if machine.config.installerISOPath != nil {
-                    Button("ถอดแผ่นติดตั้ง") {
+                    Button(tr("ถอดแผ่นติดตั้ง", "Eject Installer")) {
                         machine.ejectInstaller()
                     }
-                    .help("กดหลังติดตั้ง Linux ลงดิสก์เสร็จแล้ว เพื่อให้บูตจากดิสก์")
+                    .help(tr("กดหลังติดตั้ง Linux ลงดิสก์เสร็จแล้ว เพื่อให้บูตจากดิสก์", "Click after Linux is installed on the disk, so the machine boots from the disk"))
                 }
 
                 Button {
@@ -62,37 +62,37 @@ struct MachineDetailView: View {
                 } label: {
                     Label("Snapshot", systemImage: "clock.arrow.circlepath")
                 }
-                .help(machine.isSuspended ? "เครื่องพักอยู่ เปิดเครื่องแล้วปิดเครื่องก่อนจึงจะทำ snapshot ได้" : "บันทึกสถานะเครื่อง และย้อนกลับเมื่อทำพัง")
+                .help(machine.isSuspended ? tr("เครื่องพักอยู่ เปิดเครื่องแล้วปิดเครื่องก่อนจึงจะทำ snapshot ได้", "The machine is suspended. Start it and shut it down before taking a snapshot") : tr("บันทึกสถานะเครื่อง และย้อนกลับเมื่อทำพัง", "Save the machine state and go back if something breaks"))
                 .disabled(machine.isSuspended)
 
                 Menu {
                     Group {
-                        Button("ตั้งค่าเครื่อง…") { showingSettings = true }
+                        Button(tr("ตั้งค่าเครื่อง…", "Machine Settings…")) { showingSettings = true }
                         Divider()
-                        Button(machine.config.sharedFolderPath == nil ? "แชร์โฟลเดอร์…" : "เปลี่ยนโฟลเดอร์แชร์…") {
+                        Button(machine.config.sharedFolderPath == nil ? tr("แชร์โฟลเดอร์…", "Share a Folder…") : tr("เปลี่ยนโฟลเดอร์แชร์…", "Change Shared Folder…")) {
                             showingFolderPicker = true
                         }
                         if machine.config.sharedFolderPath != nil {
-                            Button("เลิกแชร์โฟลเดอร์") {
+                            Button(tr("เลิกแชร์โฟลเดอร์", "Stop Sharing Folder")) {
                                 machine.setSharedFolder(nil)
                             }
                         }
-                        Button("โฟลเดอร์แชร์เพิ่มเติม…") { showingExtraFolders = true }
+                        Button(tr("โฟลเดอร์แชร์เพิ่มเติม…", "More Shared Folders…")) { showingExtraFolders = true }
                         Divider()
-                        Button("ทำสำเนาเครื่อง") { library.duplicate(machine) }
-                            .help("สร้างเครื่องใหม่ที่มีทุกอย่างเหมือนเครื่องนี้ ใช้พื้นที่เพิ่มเฉพาะส่วนที่ต่างกัน")
+                        Button(tr("ทำสำเนาเครื่อง", "Duplicate Machine")) { library.duplicate(machine) }
+                            .help(tr("สร้างเครื่องใหม่ที่มีทุกอย่างเหมือนเครื่องนี้ ใช้พื้นที่เพิ่มเฉพาะส่วนที่ต่างกัน", "Create a new machine identical to this one. Only the differences use extra space"))
                     }
                     .disabled(machine.isSuspended)
                     if machine.isSuspended {
                         Divider()
-                        Button("ทิ้งสถานะที่พักไว้…") { confirmingDiscard = true }
+                        Button(tr("ทิ้งสถานะที่พักไว้…", "Discard Suspended State…")) { confirmingDiscard = true }
                     }
                     Divider()
-                    Button("แสดงไฟล์ของเครื่องใน Finder") {
+                    Button(tr("แสดงไฟล์ของเครื่องใน Finder", "Show Machine Files in Finder")) {
                         NSWorkspace.shared.activateFileViewerSelecting([machine.bundle.url])
                     }
                     Divider()
-                    Button("ลบเครื่องนี้…", role: .destructive) { confirmingDelete = true }
+                    Button(tr("ลบเครื่องนี้…", "Delete This Machine…"), role: .destructive) { confirmingDelete = true }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -107,10 +107,10 @@ struct MachineDetailView: View {
                 Button {
                     machine.start()
                 } label: {
-                    Label(machine.isSuspended ? "เปิดต่อ" : "เปิดเครื่อง", systemImage: "play.fill")
+                    Label(machine.isSuspended ? tr("เปิดต่อ", "Resume") : tr("เปิดเครื่อง", "Start"), systemImage: "play.fill")
                 }
                 .keyboardShortcut(.defaultAction)
-                .help(machine.isSuspended ? "กลับไปที่เดิมตอนพักเครื่องไว้" : "เปิดเครื่อง")
+                .help(machine.isSuspended ? tr("กลับไปที่เดิมตอนพักเครื่องไว้", "Pick up where you left off") : tr("เปิดเครื่อง", "Start"))
             }
 
             if machine.state == .running {
@@ -123,20 +123,20 @@ struct MachineDetailView: View {
                     Button {
                         machine.suspend()
                     } label: {
-                        Label("พักเครื่อง", systemImage: "pause.fill")
+                        Label(tr("พักเครื่อง", "Suspend"), systemImage: "pause.fill")
                     }
-                    .help("เก็บทุกอย่างที่เปิดอยู่ไว้ แล้วกลับมาที่เดิมได้ในไม่กี่วินาที")
+                    .help(tr("เก็บทุกอย่างที่เปิดอยู่ไว้ แล้วกลับมาที่เดิมได้ในไม่กี่วินาที", "Keep everything open and come back to it in seconds"))
                 }
 
                 Button {
                     machine.requestShutdown()
                 } label: {
-                    Label("ปิดเครื่อง", systemImage: "power")
+                    Label(tr("ปิดเครื่อง", "Shut Down"), systemImage: "power")
                 }
             }
 
             if machine.state == .starting || machine.state == .stopping {
-                Button("บังคับปิด") { machine.forceStop() }
+                Button(tr("บังคับปิด", "Force Stop")) { machine.forceStop() }
             }
         }
         .padding(.horizontal, 16)
@@ -163,23 +163,23 @@ struct MachineDetailView: View {
                 Image(systemName: "desktopcomputer")
                     .font(.system(size: 48))
                     .foregroundStyle(.secondary)
-                Text("เครื่องปิดอยู่")
+                Text(tr("เครื่องปิดอยู่", "The machine is off"))
                     .font(.title3)
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
-                    infoRow("CPU", "\(machine.config.cpuCount) คอร์")
+                    infoRow("CPU", tr("\(machine.config.cpuCount) คอร์", "\(machine.config.cpuCount) cores"))
                     infoRow("RAM", "\(machine.config.memoryGB) GB")
-                    infoRow("ดิสก์", "\(machine.config.diskGB) GB")
+                    infoRow(tr("ดิสก์", "Disk"), "\(machine.config.diskGB) GB")
                     if let folder = machine.config.sharedFolderPath {
-                        infoRow("โฟลเดอร์แชร์", folder)
+                        infoRow(tr("โฟลเดอร์แชร์", "Shared folder"), folder)
                     }
                     if !machine.config.extraFolders.isEmpty {
-                        infoRow("แชร์เพิ่มเติม", machine.config.extraFolders.map(\.name).joined(separator: ", "))
+                        infoRow(tr("แชร์เพิ่มเติม", "More shared folders"), machine.config.extraFolders.map(\.name).joined(separator: ", "))
                     }
                     if machine.config.rosettaEnabled {
-                        infoRow("Rosetta", "เปิดใช้")
+                        infoRow("Rosetta", tr("เปิดใช้", "On"))
                     }
                     if let preset = machine.config.preset, preset != .basic {
-                        infoRow("ชุดโปรแกรม", preset.title)
+                        infoRow(tr("ชุดโปรแกรม", "Software set"), preset.title)
                     }
                 }
                 .font(.callout)
@@ -219,47 +219,47 @@ struct MachineSettingsSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
-                TextField("ชื่อเครื่อง", text: $name)
-                Stepper("CPU: \(cpuCount) คอร์", value: $cpuCount, in: 1...max(1, maxCPU))
+                TextField(tr("ชื่อเครื่อง", "Machine name"), text: $name)
+                Stepper(tr("CPU: \(cpuCount) คอร์", "CPU: \(cpuCount) cores"), value: $cpuCount, in: 1...max(1, maxCPU))
                 Stepper("RAM: \(memoryGB) GB", value: $memoryGB, in: 2...maxMemoryGB)
-                Stepper("ดิสก์: \(diskGB) GB", value: $diskGB, in: machine.config.diskGB...1024, step: 8)
-                Text("ขยายดิสก์ได้อย่างเดียว ลดขนาดไม่ได้")
+                Stepper(tr("ดิสก์: \(diskGB) GB", "Disk: \(diskGB) GB"), value: $diskGB, in: machine.config.diskGB...1024, step: 8)
+                Text(tr("ขยายดิสก์ได้อย่างเดียว ลดขนาดไม่ได้", "The disk can only grow, not shrink"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if RosettaSupport.availability != .notSupported {
-                    Toggle("รันโปรแกรม x86_64 ผ่าน Rosetta", isOn: $rosetta)
+                    Toggle(tr("รันโปรแกรม x86_64 ผ่าน Rosetta", "Run x86_64 programs with Rosetta"), isOn: $rosetta)
                     if rosetta && !machine.config.rosettaEnabled {
-                        Text("มีผลเมื่อเปิดเครื่องครั้งถัดไป จากนั้นรันคำสั่งติดตั้ง LinMO Tools ใน Linux อีกครั้งหนึ่งครั้ง")
+                        Text(tr("มีผลเมื่อเปิดเครื่องครั้งถัดไป จากนั้นรันคำสั่งติดตั้ง LinMO Tools ใน Linux อีกครั้งหนึ่งครั้ง", "Takes effect the next time the machine starts. Then run the LinMO Tools install command in Linux once more."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                Toggle("ให้ Linux ใช้ไมโครโฟนของ Mac", isOn: $microphone)
+                Toggle(tr("ให้ Linux ใช้ไมโครโฟนของ Mac", "Let Linux use the Mac microphone"), isOn: $microphone)
                     .onChange(of: microphone) {
                         if microphone {
                             AVCaptureDevice.requestAccess(for: .audio) { granted in
                                 if !granted {
                                     Task { @MainActor in
                                         microphone = false
-                                        machine.errorMessage = "LinMO ยังไม่ได้รับสิทธิ์ใช้ไมโครโฟน เปิดได้ที่ System Settings → Privacy & Security → Microphone"
+                                        machine.errorMessage = tr("LinMO ยังไม่ได้รับสิทธิ์ใช้ไมโครโฟน เปิดได้ที่ System Settings → Privacy & Security → Microphone", "LinMO does not have microphone access yet. Turn it on in System Settings → Privacy & Security → Microphone")
                                     }
                                 }
                             }
                         }
                     }
-                Text("มีผลเมื่อเปิดเครื่องครั้งถัดไป")
+                Text(tr("มีผลเมื่อเปิดเครื่องครั้งถัดไป", "Takes effect the next time the machine starts"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Toggle("คมชัดสูงบนจอ Retina", isOn: $hiDPI)
-                Text("Linux ใช้ความละเอียดเท่าจอ Mac และขยายตัวหนังสือ 2 เท่า มีผลเมื่อเปิดเครื่องครั้งถัดไป")
+                Toggle(tr("คมชัดสูงบนจอ Retina", "High resolution on Retina displays"), isOn: $hiDPI)
+                Text(tr("Linux ใช้ความละเอียดเท่าจอ Mac และขยายตัวหนังสือ 2 เท่า มีผลเมื่อเปิดเครื่องครั้งถัดไป", "Linux uses the full Mac display resolution with 2x text. Takes effect the next time the machine starts"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Toggle("พิมพ์ด้วยแป้นพิมพ์ของ Mac (โหมดหน้าต่างแยก)", isOn: $macTextInput)
-                Text("สลับภาษาไทย/อังกฤษด้วยปุ่มของ Mac ได้เลย ปุ่ม Option จะใช้พิมพ์อักขระพิเศษแบบ Mac แทน Alt")
+                Toggle(tr("พิมพ์ด้วยแป้นพิมพ์ของ Mac (โหมดหน้าต่างแยก)", "Type with the Mac keyboard (separate windows mode)"), isOn: $macTextInput)
+                Text(tr("สลับภาษาไทย/อังกฤษด้วยปุ่มของ Mac ได้เลย ปุ่ม Option จะใช้พิมพ์อักขระพิเศษแบบ Mac แทน Alt", "Switch input languages with the Mac keys. Option types special characters the Mac way instead of acting as Alt"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Toggle("เปิดแอพผ่าน Wayland (ทดลอง)", isOn: $preferWayland)
-                Text("ใช้ compositor ของ LinMO เอง เหมาะกับ distro ที่ใช้ Wayland อย่างเดียว แอพ X11 ก็เปิดผ่านทางนี้ได้ (Xwayland)")
+                Toggle(tr("เปิดแอพผ่าน Wayland (ทดลอง)", "Open apps through Wayland (experimental)"), isOn: $preferWayland)
+                Text(tr("ใช้ compositor ของ LinMO เอง เหมาะกับ distro ที่ใช้ Wayland อย่างเดียว แอพ X11 ก็เปิดผ่านทางนี้ได้ (Xwayland)", "Uses LinMO's own compositor. Good for Wayland-only distros. X11 apps also work this way (Xwayland)"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -267,11 +267,11 @@ struct MachineSettingsSheet: View {
 
             Divider()
             HStack {
-                Button("ยกเลิก") { dismiss() }
+                Button(tr("ยกเลิก", "Cancel")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 if installingRosetta { ProgressView().controlSize(.small) }
-                Button("บันทึก") { save() }
+                Button(tr("บันทึก", "Save")) { save() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || installingRosetta)
             }
@@ -298,7 +298,7 @@ struct MachineSettingsSheet: View {
                 do {
                     try await RosettaSupport.install()
                 } catch {
-                    machine.errorMessage = "ติดตั้ง Rosetta ไม่สำเร็จ: \(error.localizedDescription)"
+                    machine.errorMessage = tr("ติดตั้ง Rosetta ไม่สำเร็จ: \(error.localizedDescription)", "Could not install Rosetta: \(error.localizedDescription)")
                 }
                 installingRosetta = false
             }
@@ -327,9 +327,9 @@ struct PortsMenu: View {
             Menu {
                 let web = forwarder.forwarded.filter { $0.guest != 22 }
                 if web.isEmpty {
-                    Text("ยังไม่มีโปรแกรมใน Linux เปิดพอร์ตรอรับการเชื่อมต่อ")
+                    Text(tr("ยังไม่มีโปรแกรมใน Linux เปิดพอร์ตรอรับการเชื่อมต่อ", "No program in Linux is listening on a port yet"))
                 } else {
-                    Section("เปิดใน browser ของ Mac") {
+                    Section(tr("เปิดใน browser ของ Mac", "Open in a Mac browser")) {
                         ForEach(web) { port in
                             Button("localhost:\(String(port.mac))" + (port.program.map { " — \($0)" } ?? "")) {
                                 if let url = URL(string: "http://localhost:\(port.mac)") {
@@ -341,24 +341,24 @@ struct PortsMenu: View {
                 }
                 if let command = forwarder.sshCommand {
                     Divider()
-                    Button("คัดลอกคำสั่ง SSH: \(command)") {
+                    Button(tr("คัดลอกคำสั่ง SSH: \(command)", "Copy SSH Command: \(command)")) {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(command, forType: .string)
                     }
                 }
                 if let command = forwarder.dockerSetupCommand {
                     Divider()
-                    Button("คัดลอกคำสั่งใช้ Docker ของ Linux จาก Mac") {
+                    Button(tr("คัดลอกคำสั่งใช้ Docker ของ Linux จาก Mac", "Copy Command to Use Linux Docker from the Mac")) {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(command, forType: .string)
                     }
                     .help(command)
                 }
             } label: {
-                Label("พอร์ต", systemImage: "network")
+                Label(tr("พอร์ต", "Ports"), systemImage: "network")
             }
             .fixedSize()
-            .help("โปรแกรมที่เปิดพอร์ตใน Linux ใช้จาก Mac ได้ที่ localhost พอร์ตเดียวกัน")
+            .help(tr("โปรแกรมที่เปิดพอร์ตใน Linux ใช้จาก Mac ได้ที่ localhost พอร์ตเดียวกัน", "Programs listening on a port in Linux are reachable from the Mac at localhost on the same port"))
         }
     }
 }
@@ -370,15 +370,15 @@ struct ExtraFoldersSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("โฟลเดอร์แชร์เพิ่มเติม")
+            Text(tr("โฟลเดอร์แชร์เพิ่มเติม", "More Shared Folders"))
                 .font(.headline)
-            Text("แต่ละโฟลเดอร์จะอยู่ที่ ~/MacFolders/ชื่อโฟลเดอร์ ใน Linux มีผลเมื่อเปิดเครื่องครั้งถัดไป เครื่องที่สร้างไว้ก่อนต้องอัปเดต LinMO Tools ก่อน")
+            Text(tr("แต่ละโฟลเดอร์จะอยู่ที่ ~/MacFolders/ชื่อโฟลเดอร์ ใน Linux มีผลเมื่อเปิดเครื่องครั้งถัดไป เครื่องที่สร้างไว้ก่อนต้องอัปเดต LinMO Tools ก่อน", "Each folder appears at ~/MacFolders/<folder name> in Linux. Takes effect the next time the machine starts. Older machines need a LinMO Tools update first."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             List {
                 if machine.config.extraFolders.isEmpty {
-                    Text("ยังไม่มีโฟลเดอร์")
+                    Text(tr("ยังไม่มีโฟลเดอร์", "No folders yet"))
                         .foregroundStyle(.secondary)
                 }
                 ForEach(machine.config.extraFolders) { folder in
@@ -392,7 +392,7 @@ struct ExtraFoldersSheet: View {
                                 .truncationMode(.middle)
                         }
                         Spacer()
-                        Toggle("อ่านอย่างเดียว", isOn: Binding(
+                        Toggle(tr("อ่านอย่างเดียว", "Read only"), isOn: Binding(
                             get: { folder.readOnly },
                             set: { machine.setExtraFolder(folder.id, readOnly: $0) }
                         ))
@@ -403,15 +403,15 @@ struct ExtraFoldersSheet: View {
                             Image(systemName: "minus.circle")
                         }
                         .buttonStyle(.borderless)
-                        .help("เลิกแชร์โฟลเดอร์นี้")
+                        .help(tr("เลิกแชร์โฟลเดอร์นี้", "Stop sharing this folder"))
                     }
                 }
             }
             .frame(minHeight: 160)
             HStack {
-                Button("เพิ่มโฟลเดอร์…") { picking = true }
+                Button(tr("เพิ่มโฟลเดอร์…", "Add Folder…")) { picking = true }
                 Spacer()
-                Button("เสร็จ") { dismiss() }
+                Button(tr("เสร็จ", "Done")) { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
         }

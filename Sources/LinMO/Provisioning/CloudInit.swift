@@ -399,7 +399,7 @@ enum CloudInit {
             staging.path,
         ])
         guard fm.fileExists(atPath: destination.path) else {
-            throw LinMOError.message("สร้างแผ่น cloud-init ไม่สำเร็จ")
+            throw LinMOError.message(tr("สร้างแผ่น cloud-init ไม่สำเร็จ", "Could not create the cloud-init disk"))
         }
     }
 }
@@ -419,7 +419,7 @@ enum Shell {
         let text = String(data: data, encoding: .utf8) ?? ""
         guard process.terminationStatus == 0 else {
             let name = URL(fileURLWithPath: executable).lastPathComponent
-            throw LinMOError.message("\(name) ทำงานไม่สำเร็จ: \(text.trimmingCharacters(in: .whitespacesAndNewlines))")
+            throw LinMOError.message(tr("\(name) ทำงานไม่สำเร็จ: \(text.trimmingCharacters(in: .whitespacesAndNewlines))", "\(name) failed: \(text.trimmingCharacters(in: .whitespacesAndNewlines))"))
         }
         return text
     }

@@ -69,7 +69,7 @@ struct MachineBundle {
                 try fm.copyItem(at: diskSource, to: bundle.diskURL)
             } else {
                 guard fm.createFile(atPath: bundle.diskURL.path, contents: nil) else {
-                    throw LinMOError.message("สร้างไฟล์ดิสก์ไม่สำเร็จ")
+                    throw LinMOError.message(tr("สร้างไฟล์ดิสก์ไม่สำเร็จ", "Could not create the disk file"))
                 }
             }
             try bundle.growDisk(toGB: config.diskGB)
@@ -211,7 +211,7 @@ struct MachineBundle {
         let savedDisk = dir.appendingPathComponent("Disk.img")
         let savedNVRAM = dir.appendingPathComponent("NVRAM")
         guard fm.fileExists(atPath: savedDisk.path), fm.fileExists(atPath: savedNVRAM.path) else {
-            throw LinMOError.message("ไฟล์ของ snapshot ไม่ครบ")
+            throw LinMOError.message(tr("ไฟล์ของ snapshot ไม่ครบ", "The snapshot files are incomplete"))
         }
 
         let tempDisk = url.appendingPathComponent("Disk.img.restoring")

@@ -12,13 +12,13 @@ enum ProvisioningPhase: Equatable, Sendable {
 
     var title: String {
         switch self {
-        case .preparing: return "กำลังเตรียม…"
-        case .installingRosetta: return "กำลังติดตั้ง Rosetta…"
-        case .downloading(let f): return "กำลังดาวน์โหลด Linux… \(Int(f * 100))%"
-        case .verifying: return "กำลังตรวจสอบไฟล์…"
-        case .extracting: return "กำลังแตกไฟล์…"
-        case .creatingMachine: return "กำลังสร้างเครื่อง…"
-        case .finished: return "เสร็จแล้ว"
+        case .preparing: return tr("กำลังเตรียม…", "Preparing…")
+        case .installingRosetta: return tr("กำลังติดตั้ง Rosetta…", "Installing Rosetta…")
+        case .downloading(let f): return tr("กำลังดาวน์โหลด Linux… \(Int(f * 100))%", "Downloading Linux… \(Int(f * 100))%")
+        case .verifying: return tr("กำลังตรวจสอบไฟล์…", "Verifying files…")
+        case .extracting: return tr("กำลังแตกไฟล์…", "Extracting…")
+        case .creatingMachine: return tr("กำลังสร้างเครื่อง…", "Creating the machine…")
+        case .finished: return tr("เสร็จแล้ว", "Done")
         case .failed(let message): return message
         }
     }
@@ -84,7 +84,7 @@ final class Provisioner: ObservableObject {
             phase = .finished
         } catch {
             acceptsImagePhases = false
-            phase = .failed("สร้างเครื่องไม่สำเร็จ: \(error.localizedDescription)")
+            phase = .failed(tr("สร้างเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not create the machine: \(error.localizedDescription)"))
         }
     }
 }

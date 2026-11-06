@@ -62,21 +62,21 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             seamless.prefersMacTextInput = copy.macTextInput
             seamless.prefersWayland = copy.preferWayland
         } catch {
-            errorMessage = "บันทึกการตั้งค่าไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("บันทึกการตั้งค่าไม่สำเร็จ: \(error.localizedDescription)", "Could not save settings: \(error.localizedDescription)")
         }
     }
 
     func growDisk(toGB gb: Int) {
         guard state == .stopped, gb > config.diskGB else { return }
         guard !isSuspended else {
-            errorMessage = "เครื่องพักอยู่ ขยายดิสก์ไม่ได้ เปิดเครื่องแล้วปิดเครื่องก่อนจึงจะขยายดิสก์ได้"
+            errorMessage = tr("เครื่องพักอยู่ ขยายดิสก์ไม่ได้ เปิดเครื่องแล้วปิดเครื่องก่อนจึงจะขยายดิสก์ได้", "The machine is suspended, so the disk cannot grow. Start it and shut it down first.")
             return
         }
         do {
             try bundle.growDisk(toGB: gb)
             update { $0.diskGB = gb }
         } catch {
-            errorMessage = "ขยายดิสก์ไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ขยายดิสก์ไม่สำเร็จ: \(error.localizedDescription)", "Could not grow the disk: \(error.localizedDescription)")
         }
     }
 
@@ -94,7 +94,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         guard state == .stopped else { return }
         let mac = bundle.macAddress().string
         if let twin = MachineLibrary.shared.machines.first(where: { $0 !== self && $0.isRunning && $0.bundle.macAddress().string == mac }) {
-            errorMessage = "\"\(twin.config.name)\" เป็นต้นฉบับหรือสำเนาของเครื่องนี้และเปิดอยู่ ปิดเครื่องนั้นก่อน เพราะสองเครื่องใช้การ์ดเครือข่ายเดียวกันจะต่ออินเทอร์เน็ตชนกัน"
+            errorMessage = tr("\"\(twin.config.name)\" เป็นต้นฉบับหรือสำเนาของเครื่องนี้และเปิดอยู่ ปิดเครื่องนั้นก่อน เพราะสองเครื่องใช้การ์ดเครือข่ายเดียวกันจะต่ออินเทอร์เน็ตชนกัน", "\"\(twin.config.name)\" is the original or a copy of this machine and is running. Shut it down first, because two machines with the same network card would conflict on the network.")
             return
         }
         do {
@@ -128,7 +128,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         } catch {
             fileAccess.endAll()
             machineLock = nil
-            errorMessage = "ตั้งค่าเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ตั้งค่าเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not configure the machine: \(error.localizedDescription)")
         }
     }
 
@@ -149,7 +149,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
                 case .success:
                     self.state = .running
                 case .failure(let error):
-                    self.errorMessage = "เปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                    self.errorMessage = tr("เปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not start the machine: \(error.localizedDescription)")
                     self.didStop()
                 }
             }
@@ -173,7 +173,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
                         case .success:
                             self.state = .running
                         case .failure(let error):
-                            self.errorMessage = "เปิดเครื่องต่อจากที่พักไว้ไม่สำเร็จ: \(error.localizedDescription)"
+                            self.errorMessage = tr("เปิดเครื่องต่อจากที่พักไว้ไม่สำเร็จ: \(error.localizedDescription)", "Could not resume the machine: \(error.localizedDescription)")
                             self.forceStop()
                         }
                     }
@@ -194,7 +194,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             Task { @MainActor in
                 guard let self else { completion?(); return }
                 if case .failure(let error) = result {
-                    self.errorMessage = "พักเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                    self.errorMessage = tr("พักเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not suspend the machine: \(error.localizedDescription)")
                     self.state = .running
                     completion?()
                     return
@@ -204,7 +204,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
                         guard let self else { completion?(); return }
                         if let error {
                             self.bundle.discardSavedState()
-                            self.errorMessage = "พักเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                            self.errorMessage = tr("พักเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not suspend the machine: \(error.localizedDescription)")
                             machine.resume { _ in
                                 Task { @MainActor in
                                     self.state = .running
@@ -241,7 +241,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
                 update { $0.sharedFolderPath = resolved.url.path; $0.sharedFolderBookmark = fresh }
             }
         } else if AppEnvironment.isSandboxed && config.sharedFolderPath != nil {
-            throw LinMOError.message("ต้องเลือกโฟลเดอร์แชร์ใหม่อีกครั้งเพื่อให้สิทธิ์ LinMO (เมนู ••• → เปลี่ยนโฟลเดอร์แชร์) หรือเลิกแชร์โฟลเดอร์")
+            throw LinMOError.message(tr("ต้องเลือกโฟลเดอร์แชร์ใหม่อีกครั้งเพื่อให้สิทธิ์ LinMO (เมนู ••• → เปลี่ยนโฟลเดอร์แชร์) หรือเลิกแชร์โฟลเดอร์", "Choose the shared folder again to give LinMO access (••• menu → Change Shared Folder…), or stop sharing it"))
         }
         var refreshed = config.extraFolders
         for index in refreshed.indices {
@@ -324,7 +324,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
                 try machine.requestStop()
                 state = .stopping
             } catch {
-                errorMessage = "ส่งคำสั่งปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                errorMessage = tr("ส่งคำสั่งปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not send the shutdown request: \(error.localizedDescription)")
             }
         } else {
             forceStop()
@@ -339,7 +339,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             Task { @MainActor in
                 guard let self else { return }
                 if let error {
-                    self.errorMessage = "ปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                    self.errorMessage = tr("ปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not shut down the machine: \(error.localizedDescription)")
                 }
                 self.didStop()
             }
@@ -402,7 +402,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
 
         if restartAfterSetup {
             restartAfterSetup = false
-            if setupStatus?.errors == 0, snapshots.isEmpty, (try? bundle.createSnapshot(named: "หลังติดตั้งเสร็จ")) != nil {
+            if setupStatus?.errors == 0, snapshots.isEmpty, (try? bundle.createSnapshot(named: tr("หลังติดตั้งเสร็จ", "After setup"))) != nil {
                 reloadSnapshots()
             }
             start()
@@ -452,7 +452,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             _ = try bundle.createSnapshot(named: finalName)
             reloadSnapshots()
         } catch {
-            errorMessage = "บันทึก snapshot ไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("บันทึก snapshot ไม่สำเร็จ: \(error.localizedDescription)", "Could not save the snapshot: \(error.localizedDescription)")
         }
     }
 
@@ -461,7 +461,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         do {
             try bundle.restoreSnapshot(snapshot)
         } catch {
-            errorMessage = "ย้อนกลับไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ย้อนกลับไม่สำเร็จ: \(error.localizedDescription)", "Could not restore: \(error.localizedDescription)")
         }
     }
 
@@ -470,7 +470,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             try bundle.deleteSnapshot(snapshot)
             reloadSnapshots()
         } catch {
-            errorMessage = "ลบ snapshot ไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ลบ snapshot ไม่สำเร็จ: \(error.localizedDescription)", "Could not delete the snapshot: \(error.localizedDescription)")
         }
     }
 }
@@ -483,7 +483,7 @@ extension MachineController: VZVirtualMachineDelegate {
 
     nonisolated func virtualMachine(_ virtualMachine: VZVirtualMachine, didStopWithError error: Error) {
         Task { @MainActor in
-            self.errorMessage = "เครื่องหยุดทำงานเพราะมีข้อผิดพลาด: \(error.localizedDescription)"
+            self.errorMessage = tr("เครื่องหยุดทำงานเพราะมีข้อผิดพลาด: \(error.localizedDescription)", "The machine stopped because of an error: \(error.localizedDescription)")
             self.didStop()
         }
     }

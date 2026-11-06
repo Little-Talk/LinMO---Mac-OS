@@ -12,29 +12,29 @@ enum Preset: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .basic: return "พื้นฐาน"
-        case .learner: return "สายเรียน Linux"
-        case .developer: return "สาย dev"
-        case .securityLab: return "สาย security lab"
-        case .dataScience: return "สาย data science"
-        case .design: return "สายออกแบบ"
+        case .basic: return tr("พื้นฐาน", "Basic")
+        case .learner: return tr("สายเรียน Linux", "Learning Linux")
+        case .developer: return tr("สาย dev", "Developer")
+        case .securityLab: return tr("สาย security lab", "Security lab")
+        case .dataScience: return tr("สาย data science", "Data science")
+        case .design: return tr("สายออกแบบ", "Design")
         }
     }
 
     var summary: String {
         switch self {
         case .basic:
-            return "หน้าจอ desktop และ Firefox — เบาที่สุด"
+            return tr("หน้าจอ desktop และ Firefox — เบาที่สุด", "Desktop and Firefox only. The lightest option")
         case .learner:
-            return "คู่มือคำสั่ง (man), vim/nano, htop, tree, git และไฟล์แนะนำคำสั่งแรกที่ควรลอง"
+            return tr("คู่มือคำสั่ง (man), vim/nano, htop, tree, git และไฟล์แนะนำคำสั่งแรกที่ควรลอง", "Command manuals (man), vim/nano, htop, tree, git and a starter file of commands to try")
         case .developer:
-            return "VS Code, git, build-essential, Python, Node.js, Go, Java, Docker และเครื่องมือ CLI ที่ใช้บ่อย"
+            return tr("VS Code, git, build-essential, Python, Node.js, Go, Java, Docker และเครื่องมือ CLI ที่ใช้บ่อย", "VS Code, git, build-essential, Python, Node.js, Go, Java, Docker and common CLI tools")
         case .securityLab:
-            return "nmap, Wireshark, tcpdump, John, hashcat, hydra, sqlmap และเครื่องมือฝึก CTF — ใช้กับระบบที่ได้รับอนุญาตเท่านั้น"
+            return tr("nmap, Wireshark, tcpdump, John, hashcat, hydra, sqlmap และเครื่องมือฝึก CTF — ใช้กับระบบที่ได้รับอนุญาตเท่านั้น", "nmap, Wireshark, tcpdump, John, hashcat, hydra, sqlmap and CTF practice tools. Only use them on systems you are authorized to test")
         case .dataScience:
-            return "Python + JupyterLab, pandas, NumPy, SciPy, scikit-learn, matplotlib, seaborn, R + tidyverse และ SQLite"
+            return tr("Python + JupyterLab, pandas, NumPy, SciPy, scikit-learn, matplotlib, seaborn, R + tidyverse และ SQLite", "Python + JupyterLab, pandas, NumPy, SciPy, scikit-learn, matplotlib, seaborn, R + tidyverse and SQLite")
         case .design:
-            return "GIMP, Inkscape, Krita, Blender, darktable, Scribus, FontForge, ImageMagick และฟอนต์ไทย/Noto"
+            return tr("GIMP, Inkscape, Krita, Blender, darktable, Scribus, FontForge, ImageMagick และฟอนต์ไทย/Noto", "GIMP, Inkscape, Krita, Blender, darktable, Scribus, FontForge, ImageMagick and Thai/Noto fonts")
         }
     }
 

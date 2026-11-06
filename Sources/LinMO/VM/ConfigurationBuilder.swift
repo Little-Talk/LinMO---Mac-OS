@@ -26,7 +26,7 @@ enum ConfigurationBuilder {
         let platform = VZGenericPlatformConfiguration()
         let identifierData = try Data(contentsOf: bundle.machineIdentifierURL)
         guard let identifier = VZGenericMachineIdentifier(dataRepresentation: identifierData) else {
-            throw LinMOError.message("ไฟล์รหัสเครื่องเสีย")
+            throw LinMOError.message(tr("ไฟล์รหัสเครื่องเสีย", "The machine identifier file is damaged"))
         }
         platform.machineIdentifier = identifier
         vz.platform = platform
@@ -61,7 +61,7 @@ enum ConfigurationBuilder {
         }
         if let isoPath = config.installerISOPath {
             guard FileManager.default.fileExists(atPath: isoPath) else {
-                throw LinMOError.message("หาไฟล์ติดตั้งไม่เจอ: \(isoPath) — ถ้าติดตั้งเสร็จแล้ว ให้กด \"ถอดแผ่นติดตั้ง\"")
+                throw LinMOError.message(tr("หาไฟล์ติดตั้งไม่เจอ: \(isoPath) — ถ้าติดตั้งเสร็จแล้ว ให้กด \"ถอดแผ่นติดตั้ง\"", "Installer file not found: \(isoPath). If installation is finished, click \"Eject Installer\""))
             }
             storage.append(
                 VZUSBMassStorageDeviceConfiguration(

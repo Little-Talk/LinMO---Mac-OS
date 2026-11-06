@@ -34,18 +34,18 @@ struct LinuxApp: Codable, Identifiable, Hashable {
 
     static func categoryTitle(_ category: String) -> String {
         switch category {
-        case "Development": return "พัฒนาโปรแกรม"
-        case "Network": return "อินเทอร์เน็ต"
-        case "Office": return "งานเอกสาร"
-        case "Graphics": return "กราฟิก"
-        case "AudioVideo": return "เสียงและวิดีโอ"
-        case "Education": return "การศึกษา"
-        case "Game": return "เกม"
-        case "Science": return "วิทยาศาสตร์"
-        case "Utility": return "เครื่องมือ"
-        case "Settings": return "ตั้งค่า"
-        case "System": return "ระบบ"
-        default: return "อื่นๆ"
+        case "Development": return tr("พัฒนาโปรแกรม", "Development")
+        case "Network": return tr("อินเทอร์เน็ต", "Internet")
+        case "Office": return tr("งานเอกสาร", "Office")
+        case "Graphics": return tr("กราฟิก", "Graphics")
+        case "AudioVideo": return tr("เสียงและวิดีโอ", "Audio & Video")
+        case "Education": return tr("การศึกษา", "Education")
+        case "Game": return tr("เกม", "Games")
+        case "Science": return tr("วิทยาศาสตร์", "Science")
+        case "Utility": return tr("เครื่องมือ", "Utilities")
+        case "Settings": return tr("ตั้งค่า", "Settings")
+        case "System": return tr("ระบบ", "System")
+        default: return tr("อื่นๆ", "Other")
         }
     }
 
@@ -146,7 +146,7 @@ final class LinuxAppCatalog: ObservableObject {
         let attributes = CSSearchableItemAttributeSet(contentType: .application)
         attributes.title = app.name
         attributes.displayName = app.name
-        var description = "แอพ Linux บนเครื่อง \(app.machineName)"
+        var description = tr("แอพ Linux บนเครื่อง \(app.machineName)", "Linux app on \(app.machineName)")
         if let generic = app.generic, !generic.isEmpty { description = "\(generic) — \(description)" }
         attributes.contentDescription = description
         attributes.thumbnailData = app.iconPNG
