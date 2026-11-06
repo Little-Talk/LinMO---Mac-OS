@@ -38,6 +38,8 @@ enum GuestTools {
         try GuestFiles.agent.write(to: staging.appendingPathComponent("linmo-agent.py"))
         try GuestFiles.install.write(to: staging.appendingPathComponent("install.sh"))
         try GuestFiles.installWine.write(to: staging.appendingPathComponent("install-wine.sh"))
+        try GuestFiles.ports.write(to: staging.appendingPathComponent("linmo-ports.py"))
+        try "\(GuestFiles.version)\n".write(to: staging.appendingPathComponent("version.txt"), atomically: true, encoding: .utf8)
 
         if let binary = Bundle.main.url(forResource: "linmo-wayland-aarch64", withExtension: nil) {
             try fm.copyItem(at: binary, to: staging.appendingPathComponent("linmo-wayland-aarch64"))

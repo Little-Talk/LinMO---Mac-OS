@@ -3,9 +3,11 @@ use smithay::backend::renderer::pixman::PixmanRenderer;
 use smithay::backend::renderer::utils::on_commit_buffer_handler;
 use smithay::delegate_compositor;
 use smithay::delegate_data_device;
+use smithay::delegate_fractional_scale;
 use smithay::delegate_output;
 use smithay::delegate_seat;
 use smithay::delegate_shm;
+use smithay::delegate_viewporter;
 use smithay::delegate_xdg_decoration;
 use smithay::delegate_xdg_shell;
 use smithay::desktop::{
@@ -27,6 +29,8 @@ use smithay::reexports::wayland_server::{Client, DisplayHandle};
 use smithay::utils::IsAlive;
 use smithay::utils::{Rectangle, Serial, Transform};
 use smithay::wayland::buffer::BufferHandler;
+use smithay::wayland::fractional_scale::{with_fractional_scale, FractionalScaleHandler, FractionalScaleManagerState};
+use smithay::wayland::viewporter::ViewporterState;
 use smithay::wayland::compositor::{
     get_parent, is_sync_subsurface, with_states, with_surface_tree_downward, CompositorClientState,
     CompositorHandler, CompositorState, SurfaceAttributes, TraversalAction,
@@ -109,6 +113,8 @@ impl State {
         let data_device_state = DataDeviceState::new::<Self>(&dh);
         let decoration_state = XdgDecorationState::new::<Self>(&dh);
         crate::text_input::create_global(&dh);
+        ViewporterState::new::<Self>(&dh);
+        FractionalScaleManagerState::new::<Self>(&dh);
         let dh_for_xwayland = dh.clone();
 
         let mut seat = seat_state.new_wl_seat(&dh, "seat0");
@@ -227,6 +233,7 @@ pub fn enter_output(output: &Output, surface: &WlSurface, scale: i32) {
         |surface, states, _| {
             output.enter(surface);
             smithay::wayland::compositor::send_surface_state(surface, states, scale, Transform::Normal);
+            with_fractional_scale(states, |fractional| fractional.set_preferred_scale(scale as f64));
         },
         |_, _, _| true,
     );
@@ -437,6 +444,13 @@ impl SeatHandler for State {
     }
 }
 
+impl FractionalScaleHandler for State {
+    fn new_fractional_scale(&mut self, surface: WlSurface) {
+        let scale = self.scale as f64;
+        with_states(&surface, |states| with_fractional_scale(states, |fractional| fractional.set_preferred_scale(scale)));
+    }
+}
+
 impl SelectionHandler for State {
     type SelectionUserData = crate::clipboard::Owner;
 
@@ -517,6 +531,8 @@ delegate_xdg_decoration!(State);
 delegate_seat!(State);
 delegate_data_device!(State);
 delegate_output!(State);
+delegate_viewporter!(State);
+delegate_fractional_scale!(State);
 
 #[allow(unused)]
 fn _assert_alive(surface: &WlSurface) -> bool {

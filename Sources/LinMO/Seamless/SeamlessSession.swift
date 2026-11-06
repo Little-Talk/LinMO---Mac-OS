@@ -23,6 +23,8 @@ final class SeamlessSession: ObservableObject {
         let w: Int
         let h: Int
         let parent: UInt32
+        var minW: Int? = nil
+        var minH: Int? = nil
 
         var isPopup: Bool { kind == "popup" }
     }
@@ -30,7 +32,6 @@ final class SeamlessSession: ObservableObject {
     private struct Hello: Decodable {
         let version: Int
         let features: [String]?
-        let screen: [Int]
         let session: String?
     }
 
@@ -39,7 +40,6 @@ final class SeamlessSession: ObservableObject {
         let connection: SeamlessConnection
         var features: Set<String> = []
         var version = 0
-        var screen = CGSize(width: 1920, height: 1200)
         var apps: [App] = []
         var session = "x11"
 
@@ -51,7 +51,7 @@ final class SeamlessSession: ObservableObject {
         var isWayland: Bool { port == SeamlessPorts.wayland }
     }
 
-    static let currentAgentVersion = 6
+    static let currentAgentVersion = 10
 
     @Published private(set) var isConnected = false
     @Published private(set) var hasX11Agent = false
@@ -69,6 +69,7 @@ final class SeamlessSession: ObservableObject {
         didSet { refreshApps() }
     }
     var onAppsChanged: (@MainActor ([App]) -> Void)?
+    var onEnabledChanged: (@MainActor (Bool) -> Void)?
     private var pendingLaunches: [String] = []
 
     struct DraggedFile {
@@ -120,10 +121,6 @@ final class SeamlessSession: ObservableObject {
 
     func supports(_ feature: String, window id: UInt32) -> Bool {
         link(for: id)?.features.contains(feature) ?? false
-    }
-
-    func guestScreen(for id: UInt32) -> CGSize {
-        link(for: id)?.screen ?? CGSize(width: 1920, height: 1200)
     }
 
     private var launchLink: Link? {
@@ -218,11 +215,17 @@ final class SeamlessSession: ObservableObject {
         for link in links.values {
             link.connection.send(.stream, ["enabled": enabled])
         }
+        onEnabledChanged?(enabled)
     }
 
-    func notifyFolderChanges(_ paths: [String]) {
+    func notifyFolderChanges(_ paths: [String], tag: String? = nil) {
         guard let link = links[SeamlessPorts.agent], link.features.contains("folders") else { return }
-        link.connection.send(.folderChanged, ["paths": paths])
+        if let tag {
+            guard link.version >= 10 else { return }
+            link.connection.send(.folderChanged, ["paths": paths, "tag": tag])
+        } else {
+            link.connection.send(.folderChanged, ["paths": paths])
+        }
     }
 
     func launch(_ app: App) {
@@ -258,9 +261,6 @@ final class SeamlessSession: ObservableObject {
         switch type {
         case .hello:
             guard let hello = try? decoder.decode(Hello.self, from: payload) else { return }
-            if hello.screen.count == 2 {
-                link.screen = CGSize(width: hello.screen[0], height: hello.screen[1])
-            }
             link.features = Set(hello.features ?? [])
             link.version = hello.version
             link.session = hello.session ?? "x11"

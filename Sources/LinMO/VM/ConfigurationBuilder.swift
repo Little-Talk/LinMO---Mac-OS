@@ -5,6 +5,7 @@ import Virtualization
 enum SharedTags {
     static let folder = "linmo"
     static let rosetta = "rosetta"
+    static let extraFolders = "linmo-extra"
 }
 
 enum ConfigurationBuilder {
@@ -25,7 +26,7 @@ enum ConfigurationBuilder {
         let platform = VZGenericPlatformConfiguration()
         let identifierData = try Data(contentsOf: bundle.machineIdentifierURL)
         guard let identifier = VZGenericMachineIdentifier(dataRepresentation: identifierData) else {
-            throw LinMOError.message("ไฟล์รหัสเครื่องเสีย")
+            throw LinMOError.message(tr("ไฟล์รหัสเครื่องเสีย", "The machine identifier file is damaged"))
         }
         platform.machineIdentifier = identifier
         vz.platform = platform
@@ -36,7 +37,12 @@ enum ConfigurationBuilder {
 
         var storage: [VZStorageDeviceConfiguration] = [
             VZVirtioBlockDeviceConfiguration(
-                attachment: try VZDiskImageStorageDeviceAttachment(url: bundle.diskURL, readOnly: false)
+                attachment: try VZDiskImageStorageDeviceAttachment(
+                    url: bundle.diskURL,
+                    readOnly: false,
+                    cachingMode: .cached,
+                    synchronizationMode: .fsync
+                )
             )
         ]
         if config.attachCloudInitSeed, FileManager.default.fileExists(atPath: bundle.cloudInitSeedURL.path) {
@@ -55,7 +61,7 @@ enum ConfigurationBuilder {
         }
         if let isoPath = config.installerISOPath {
             guard FileManager.default.fileExists(atPath: isoPath) else {
-                throw LinMOError.message("หาไฟล์ ISO ไม่เจอ: \(isoPath) — ถ้าติดตั้งเสร็จแล้ว ให้กด \"ถอดแผ่นติดตั้ง\"")
+                throw LinMOError.message(tr("หาไฟล์ติดตั้งไม่เจอ: \(isoPath) — ถ้าติดตั้งเสร็จแล้ว ให้กด \"ถอดแผ่นติดตั้ง\"", "Installer file not found: \(isoPath). If installation is finished, click \"Eject Installer\""))
             }
             storage.append(
                 VZUSBMassStorageDeviceConfiguration(
@@ -82,6 +88,11 @@ enum ConfigurationBuilder {
         let output = VZVirtioSoundDeviceOutputStreamConfiguration()
         output.sink = VZHostAudioOutputStreamSink()
         sound.streams = [output]
+        if config.microphoneEnabled {
+            let input = VZVirtioSoundDeviceInputStreamConfiguration()
+            input.source = VZHostAudioInputStreamSource()
+            sound.streams.append(input)
+        }
         vz.audioDevices = [sound]
 
         vz.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
@@ -103,6 +114,17 @@ enum ConfigurationBuilder {
                 directory: VZSharedDirectory(url: URL(fileURLWithPath: folderPath, isDirectory: true), readOnly: false)
             )
             directoryShares.append(share)
+        }
+        if !config.extraFolders.isEmpty {
+            var directories: [String: VZSharedDirectory] = [:]
+            for folder in config.extraFolders where FileManager.default.fileExists(atPath: folder.path) {
+                directories[folder.name] = VZSharedDirectory(url: URL(fileURLWithPath: folder.path, isDirectory: true), readOnly: folder.readOnly)
+            }
+            if !directories.isEmpty {
+                let share = VZVirtioFileSystemDeviceConfiguration(tag: SharedTags.extraFolders)
+                share.share = VZMultipleDirectoryShare(directories: directories)
+                directoryShares.append(share)
+            }
         }
         if config.rosettaEnabled, RosettaSupport.availability == .installed {
             let share = VZVirtioFileSystemDeviceConfiguration(tag: SharedTags.rosetta)

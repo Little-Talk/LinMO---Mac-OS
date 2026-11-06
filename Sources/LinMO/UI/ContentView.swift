@@ -4,11 +4,12 @@ struct ContentView: View {
     @EnvironmentObject private var library: MachineLibrary
     @State private var selection: UUID?
     @State private var showingNewMachine = false
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
 
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
-                Section("เครื่องของฉัน") {
+                Section(tr("เครื่องของฉัน", "My Machines")) {
                     ForEach(library.machines) { machine in
                         MachineRow(machine: machine)
                             .tag(machine.id)
@@ -21,9 +22,9 @@ struct ContentView: View {
                     Button {
                         showingNewMachine = true
                     } label: {
-                        Label("สร้างเครื่องใหม่", systemImage: "plus")
+                        Label(tr("สร้างเครื่องใหม่", "New Machine"), systemImage: "plus")
                     }
-                    .help("สร้างเครื่องใหม่")
+                    .help(tr("สร้างเครื่องใหม่", "New Machine"))
                 }
             }
         } detail: {
@@ -37,6 +38,7 @@ struct ContentView: View {
                 }
             }
         }
+        .id(appLanguageRaw)
         .frame(minWidth: 900, minHeight: 600)
         .sheet(isPresented: $showingNewMachine) {
             NewMachineSheet { created in
@@ -60,7 +62,7 @@ private struct MachineRow: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(machine.config.name)
                 .font(.body.weight(.medium))
-            StatusBadge(state: machine.state)
+            StatusBadge(state: machine.state, suspended: machine.isSuspended)
                 .font(.caption)
         }
         .padding(.vertical, 3)
@@ -68,6 +70,7 @@ private struct MachineRow: View {
 }
 
 private struct EmptyLibraryView: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     let hasMachines: Bool
     let onCreate: () -> Void
 
@@ -77,14 +80,14 @@ private struct EmptyLibraryView: View {
                 .font(.system(size: 52))
                 .foregroundStyle(.secondary)
             if hasMachines {
-                Text("เลือกเครื่องจากรายการด้านซ้าย")
+                Text(tr("เลือกเครื่องจากรายการด้านซ้าย", "Select a machine from the list on the left"))
                     .font(.title3)
             } else {
-                Text("ยินดีต้อนรับสู่ LinMO")
+                Text(tr("ยินดีต้อนรับสู่ LinMO", "Welcome to LinMO"))
                     .font(.largeTitle.bold())
-                Text("ใช้ Linux บน Mac ได้ในไม่กี่คลิก")
+                Text(tr("ใช้ Linux บน Mac ได้ในไม่กี่คลิก", "Run Linux on your Mac in a few clicks"))
                     .foregroundStyle(.secondary)
-                Button("สร้างเครื่องแรก", action: onCreate)
+                Button(tr("สร้างเครื่องแรก", "Create Your First Machine"), action: onCreate)
                     .controlSize(.large)
                     .keyboardShortcut(.defaultAction)
                     .padding(.top, 6)

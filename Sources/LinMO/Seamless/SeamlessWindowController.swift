@@ -9,6 +9,7 @@ final class SeamlessWindowController: NSObject, NSWindowDelegate {
     private weak var session: SeamlessSession?
     private var info: SeamlessSession.WindowInfo
     private var pendingResize: DispatchWorkItem?
+    private var pendingSnap: DispatchWorkItem?
 
     private static var cascadePoint = NSPoint.zero
 
@@ -45,9 +46,7 @@ final class SeamlessWindowController: NSObject, NSWindowDelegate {
             )
             newWindow.subtitle = session.machineName
             newWindow.tabbingMode = .disallowed
-            let screen = session.guestScreen(for: info.id)
-            newWindow.contentMaxSize = NSSize(width: screen.width / scale, height: screen.height / scale)
-            newWindow.contentMinSize = NSSize(width: 80, height: 40)
+            newWindow.contentMinSize = Self.minimumSize(for: info, scale: scale)
         }
         newWindow.isReleasedWhenClosed = false
         newWindow.acceptsMouseMovedEvents = true
@@ -91,12 +90,35 @@ final class SeamlessWindowController: NSObject, NSWindowDelegate {
             if (sizeChanged || moved), let frame = session?.anchoredFrame(for: info) {
                 window.setFrame(frame, display: true)
             }
-        } else if sizeChanged && !window.inLiveResize {
-            let content = NSSize(width: CGFloat(info.w) / scale, height: CGFloat(info.h) / scale)
-            var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: content))
-            frame.origin = NSPoint(x: window.frame.minX, y: window.frame.maxY - frame.height)
-            window.setFrame(frame, display: true)
+        } else {
+            let minimum = Self.minimumSize(for: info, scale: scale)
+            if window.contentMinSize != minimum { window.contentMinSize = minimum }
         }
+        if !info.isPopup && sizeChanged && !window.inLiveResize {
+            fitToGuest()
+        }
+    }
+
+    private func fitToGuest() {
+        let content = NSSize(width: CGFloat(info.w) / scale, height: CGFloat(info.h) / scale)
+        var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: content))
+        frame.origin = NSPoint(x: window.frame.minX, y: window.frame.maxY - frame.height)
+        guard frame.size != window.frame.size else { return }
+        window.setFrame(frame, display: true)
+    }
+
+    private func scheduleSnap() {
+        pendingSnap?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, !self.window.inLiveResize else { return }
+            self.fitToGuest()
+        }
+        pendingSnap = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+    }
+
+    private static func minimumSize(for info: SeamlessSession.WindowInfo, scale: CGFloat) -> NSSize {
+        NSSize(width: max(80, CGFloat(info.minW ?? 0) / scale), height: max(40, CGFloat(info.minH ?? 0) / scale))
     }
 
     func show(_ image: CGImage) {
@@ -109,6 +131,7 @@ final class SeamlessWindowController: NSObject, NSWindowDelegate {
 
     func close() {
         pendingResize?.cancel()
+        pendingSnap?.cancel()
         window.delegate = nil
         view.releaseAllKeys()
         window.orderOut(nil)
@@ -144,9 +167,15 @@ final class SeamlessWindowController: NSObject, NSWindowDelegate {
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.session?.send(.resize, ["id": self.id, "w": width, "h": height])
+            self.scheduleSnap()
         }
         pendingResize = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: work)
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        guard !info.isPopup else { return }
+        scheduleSnap()
     }
 }
 
@@ -199,6 +228,10 @@ final class SeamlessView: NSView, NSTextInputClient, NSDraggingSource {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     func show(_ image: CGImage, scale: CGFloat) {
+        if let layer {
+            let gravity: CALayerContentsGravity = layer.contentsAreFlipped() ? .bottomLeft : .topLeft
+            if layer.contentsGravity != gravity { layer.contentsGravity = gravity }
+        }
         layer?.contentsScale = scale
         layer?.contents = image
     }
@@ -506,7 +539,7 @@ final class FilePromiseWriter: NSObject, NSFilePromiseProviderDelegate {
     func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL,
                              completionHandler: @escaping (Error?) -> Void) {
         guard let file = filePromiseProvider.userInfo as? SeamlessSession.DraggedFile else {
-            completionHandler(LinMOError.message("ไม่พบข้อมูลไฟล์"))
+            completionHandler(LinMOError.message(tr("ไม่พบข้อมูลไฟล์", "No file data found")))
             return
         }
         do {

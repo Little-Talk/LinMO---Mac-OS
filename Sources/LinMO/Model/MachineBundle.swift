@@ -24,6 +24,25 @@ struct MachineBundle {
     var configURL: URL { url.appendingPathComponent("config.json") }
     var cloudInitSeedURL: URL { url.appendingPathComponent("CloudInit.iso") }
     var snapshotsURL: URL { url.appendingPathComponent("Snapshots", isDirectory: true) }
+    var savedStateURL: URL { url.appendingPathComponent("SavedState.vzvmsave") }
+    var lockURL: URL { url.appendingPathComponent("Machine.lock") }
+
+    func acquireLock() throws -> MachineLock {
+        try MachineLock(url: lockURL)
+    }
+
+    private func exclusively<T>(_ body: () throws -> T) throws -> T {
+        let lock = try acquireLock()
+        return try withExtendedLifetime(lock) { try body() }
+    }
+
+    var hasSavedState: Bool {
+        FileManager.default.fileExists(atPath: savedStateURL.path)
+    }
+
+    func discardSavedState() {
+        try? FileManager.default.removeItem(at: savedStateURL)
+    }
 
 
     func loadConfig() throws -> MachineConfig {
@@ -50,7 +69,7 @@ struct MachineBundle {
                 try fm.copyItem(at: diskSource, to: bundle.diskURL)
             } else {
                 guard fm.createFile(atPath: bundle.diskURL.path, contents: nil) else {
-                    throw LinMOError.message("สร้างไฟล์ดิสก์ไม่สำเร็จ")
+                    throw LinMOError.message(tr("สร้างไฟล์ดิสก์ไม่สำเร็จ", "Could not create the disk file"))
                 }
             }
             try bundle.growDisk(toGB: config.diskGB)
@@ -66,6 +85,32 @@ struct MachineBundle {
         return bundle
     }
 
+    static func create(config: MachineConfig, importing image: URL, kind: DiskImageKind) throws -> (MachineBundle, MachineConfig) {
+        let accessing = image.startAccessingSecurityScopedResource()
+        defer { if accessing { image.stopAccessingSecurityScopedResource() } }
+        let fm = FileManager.default
+        var config = config
+        let bundle: MachineBundle
+        if kind == .qcow2 {
+            try fm.createDirectory(at: appSupportDirectory, withIntermediateDirectories: true)
+            let temp = appSupportDirectory.appendingPathComponent("Import-\(config.id.uuidString).img")
+            defer { try? fm.removeItem(at: temp) }
+            try DiskConverters.convertQcow2(source: image, destination: temp)
+            bundle = try create(config: config, diskSource: temp)
+        } else {
+            bundle = try create(config: config, diskSource: image)
+        }
+        let gb = UInt64(1024 * 1024 * 1024)
+        if let size = (try? fm.attributesOfItem(atPath: bundle.diskURL.path))?[.size] as? UInt64 {
+            let sizeGB = Int((size + gb - 1) / gb)
+            if sizeGB > config.diskGB {
+                config.diskGB = sizeGB
+                try bundle.save(config)
+            }
+        }
+        return (bundle, config)
+    }
+
     func macAddress() -> VZMACAddress {
         if let text = try? String(contentsOf: macAddressURL, encoding: .utf8),
            let saved = VZMACAddress(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) {
@@ -77,6 +122,10 @@ struct MachineBundle {
     }
 
     func growDisk(toGB gb: Int) throws {
+        try exclusively { try growDiskUnlocked(toGB: gb) }
+    }
+
+    private func growDiskUnlocked(toGB gb: Int) throws {
         let target = UInt64(gb) * 1024 * 1024 * 1024
         let handle = try FileHandle(forWritingTo: diskURL)
         defer { try? handle.close() }
@@ -86,8 +135,29 @@ struct MachineBundle {
         }
     }
 
+    func clone(as config: MachineConfig) throws -> MachineBundle {
+        try exclusively { try cloneUnlocked(as: config) }
+    }
+
+    private func cloneUnlocked(as config: MachineConfig) throws -> MachineBundle {
+        let fm = FileManager.default
+        let target = MachineBundle(url: Self.url(for: config.id))
+        try fm.createDirectory(at: target.url, withIntermediateDirectories: true)
+        do {
+            for source in [diskURL, nvramURL, macAddressURL, cloudInitSeedURL] where fm.fileExists(atPath: source.path) {
+                try fm.copyItem(at: source, to: target.url.appendingPathComponent(source.lastPathComponent))
+            }
+            try VZGenericMachineIdentifier().dataRepresentation.write(to: target.machineIdentifierURL)
+            try target.save(config)
+        } catch {
+            try? fm.removeItem(at: target.url)
+            throw error
+        }
+        return target
+    }
+
     func delete() throws {
-        try FileManager.default.removeItem(at: url)
+        try exclusively { try FileManager.default.removeItem(at: url) }
     }
 
 
@@ -110,6 +180,10 @@ struct MachineBundle {
     }
 
     func createSnapshot(named name: String) throws -> Snapshot {
+        try exclusively { try createSnapshotUnlocked(named: name) }
+    }
+
+    private func createSnapshotUnlocked(named name: String) throws -> Snapshot {
         let fm = FileManager.default
         let snapshot = Snapshot(name: name)
         let dir = snapshotDirectory(snapshot.id)
@@ -128,12 +202,16 @@ struct MachineBundle {
     }
 
     func restoreSnapshot(_ snapshot: Snapshot) throws {
+        try exclusively { try restoreSnapshotUnlocked(snapshot) }
+    }
+
+    private func restoreSnapshotUnlocked(_ snapshot: Snapshot) throws {
         let fm = FileManager.default
         let dir = snapshotDirectory(snapshot.id)
         let savedDisk = dir.appendingPathComponent("Disk.img")
         let savedNVRAM = dir.appendingPathComponent("NVRAM")
         guard fm.fileExists(atPath: savedDisk.path), fm.fileExists(atPath: savedNVRAM.path) else {
-            throw LinMOError.message("ไฟล์ของ snapshot ไม่ครบ")
+            throw LinMOError.message(tr("ไฟล์ของ snapshot ไม่ครบ", "The snapshot files are incomplete"))
         }
 
         let tempDisk = url.appendingPathComponent("Disk.img.restoring")

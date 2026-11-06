@@ -129,7 +129,7 @@ enum LinuxAppLauncher {
               let machineID = items.first(where: { $0.name == "machine" })?.value.flatMap(UUID.init(uuidString:)),
               let appID = items.first(where: { $0.name == "app" })?.value, !appID.isEmpty else { return false }
         guard let machine = MachineLibrary.shared.machines.first(where: { $0.id == machineID }) else {
-            MachineLibrary.shared.errorMessage = "ไม่พบเครื่อง Linux ของแอพนี้ (อาจถูกลบไปแล้ว)"
+            MachineLibrary.shared.errorMessage = tr("ไม่พบเครื่อง Linux ของแอพนี้ (อาจถูกลบไปแล้ว)", "The Linux machine for this app was not found (it may have been deleted)")
             return false
         }
         NSApp.activate(ignoringOtherApps: true)

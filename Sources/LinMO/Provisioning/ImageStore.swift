@@ -43,7 +43,7 @@ enum ImageStore {
             try DiskConverters.hash(of: archive, algorithm: image.algorithm)
         }.value
         guard actual == image.expectedHash.lowercased() else {
-            throw LinMOError.message("ไฟล์ที่ดาวน์โหลดเสียหาย (checksum ไม่ตรง) ลองใหม่อีกครั้ง")
+            throw LinMOError.message(tr("ไฟล์ที่ดาวน์โหลดเสียหาย (checksum ไม่ตรง) ลองใหม่อีกครั้ง", "The download is damaged (checksum mismatch). Please try again"))
         }
 
         onPhase(.extracting)
@@ -55,7 +55,7 @@ enum ImageStore {
                 try fm.createDirectory(at: extractDir, withIntermediateDirectories: true)
                 try Shell.run("/usr/bin/tar", ["-xJf", archive.path, "-C", extractDir.path])
                 guard let disk = ImageStore.largestFile(in: extractDir) else {
-                    throw LinMOError.message("ไม่พบไฟล์ดิสก์ในไฟล์ที่ดาวน์โหลดมา")
+                    throw LinMOError.message(tr("ไม่พบไฟล์ดิสก์ในไฟล์ที่ดาวน์โหลดมา", "No disk file was found in the download"))
                 }
                 try fm.moveItem(at: disk, to: converted)
             case .qcow2:
@@ -156,7 +156,7 @@ enum ImageResolver {
             let (data, response) = try await URLSession.shared.data(from: checksumsURL)
             try checkHTTP(response)
             guard let hash = expectedHash(in: String(decoding: data, as: UTF8.self), for: url.lastPathComponent) else {
-                throw LinMOError.message("ไม่พบค่า checksum ของ \(url.lastPathComponent)")
+                throw LinMOError.message(tr("ไม่พบค่า checksum ของ \(url.lastPathComponent)", "No checksum found for \(url.lastPathComponent)"))
             }
             return ResolvedImage(url: url, expectedHash: hash, algorithm: algorithm, format: format)
 
@@ -191,14 +191,14 @@ enum ImageResolver {
             return (version, link, sha)
         }
         guard let best = candidates.max(by: { $0.version < $1.version }) else {
-            throw LinMOError.message("หาไฟล์ Fedora Cloud สำหรับ ARM64 ไม่เจอ")
+            throw LinMOError.message(tr("หาไฟล์ Fedora Cloud สำหรับ ARM64 ไม่เจอ", "Could not find a Fedora Cloud image for ARM64"))
         }
         return ResolvedImage(url: best.url, expectedHash: best.sha, algorithm: .sha256, format: .rawXZ)
     }
 
     private static func checkHTTP(_ response: URLResponse) throws {
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw LinMOError.message("ดาวน์โหลดข้อมูลไม่สำเร็จ (HTTP \(http.statusCode))")
+            throw LinMOError.message(tr("ดาวน์โหลดข้อมูลไม่สำเร็จ (HTTP \(http.statusCode))", "Could not download data (HTTP \(http.statusCode))"))
         }
     }
 
@@ -253,7 +253,7 @@ private final class Downloader: NSObject, URLSessionDownloadDelegate, @unchecked
                     didFinishDownloadingTo location: URL) {
         guard let destination else { return }
         if let http = downloadTask.response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            moveError = LinMOError.message("ดาวน์โหลดไม่สำเร็จ (HTTP \(http.statusCode))")
+            moveError = LinMOError.message(tr("ดาวน์โหลดไม่สำเร็จ (HTTP \(http.statusCode))", "Download failed (HTTP \(http.statusCode))"))
             return
         }
         do {

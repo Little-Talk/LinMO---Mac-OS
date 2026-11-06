@@ -6,14 +6,17 @@ struct SettingsView: View {
     @State private var totalBytes: Int64 = 0
     @State private var confirmingClearAll = false
     @State private var errorMessage: String?
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
 
     var body: some View {
         Form {
+            LanguageSettingsSection()
+
             LinuxAppsSettingsSection()
 
             Section {
                 if cached.isEmpty {
-                    Text("ยังไม่มีไฟล์ที่ดาวน์โหลดไว้")
+                    Text(tr("ยังไม่มีไฟล์ที่ดาวน์โหลดไว้", "No downloaded files yet"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(cached) { item in
@@ -25,45 +28,46 @@ struct SettingsView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Button("ลบ") { remove(item) }
+                            Button(tr("ลบ", "Delete")) { remove(item) }
                         }
                     }
                 }
             } header: {
-                Text("ไฟล์ Linux ที่ดาวน์โหลดไว้")
+                Text(tr("ไฟล์ Linux ที่ดาวน์โหลดไว้", "Downloaded Linux files"))
             } footer: {
-                Text("เก็บไว้เพื่อให้สร้างเครื่องใหม่ได้ทันทีโดยไม่ต้องดาวน์โหลดซ้ำ ลบได้โดยไม่กระทบเครื่องที่สร้างไปแล้ว")
+                Text(tr("เก็บไว้เพื่อให้สร้างเครื่องใหม่ได้ทันทีโดยไม่ต้องดาวน์โหลดซ้ำ ลบได้โดยไม่กระทบเครื่องที่สร้างไปแล้ว", "Kept so new machines can be created right away without downloading again. Deleting them does not affect machines you already created."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
-                LabeledContent("ใช้พื้นที่ทั้งหมด", value: format(totalBytes))
+                LabeledContent(tr("ใช้พื้นที่ทั้งหมด", "Total space used"), value: format(totalBytes))
                 HStack {
-                    Button("แสดงใน Finder") {
+                    Button(tr("แสดงใน Finder", "Show in Finder")) {
                         try? FileManager.default.createDirectory(at: ImageStore.cacheDirectory, withIntermediateDirectories: true)
                         NSWorkspace.shared.open(ImageStore.cacheDirectory)
                     }
                     Spacer()
-                    Button("ลบทั้งหมด", role: .destructive) { confirmingClearAll = true }
+                    Button(tr("ลบทั้งหมด", "Delete All"), role: .destructive) { confirmingClearAll = true }
                         .disabled(totalBytes == 0)
                 }
             }
         }
         .formStyle(.grouped)
+        .id(appLanguageRaw)
         .frame(width: 520, height: 600)
         .onAppear(perform: refresh)
-        .confirmationDialog("ลบไฟล์ที่ดาวน์โหลดไว้ทั้งหมด?", isPresented: $confirmingClearAll) {
-            Button("ลบทั้งหมด", role: .destructive) {
+        .confirmationDialog(tr("ลบไฟล์ที่ดาวน์โหลดไว้ทั้งหมด?", "Delete all downloaded files?"), isPresented: $confirmingClearAll) {
+            Button(tr("ลบทั้งหมด", "Delete All"), role: .destructive) {
                 do {
                     try ImageStore.clearCache()
                 } catch {
-                    errorMessage = "ลบไม่สำเร็จ: \(error.localizedDescription)"
+                    errorMessage = tr("ลบไม่สำเร็จ: \(error.localizedDescription)", "Could not delete: \(error.localizedDescription)")
                 }
                 refresh()
             }
         } message: {
-            Text("ครั้งหน้าที่สร้างเครื่องใหม่จะต้องดาวน์โหลดอีกครั้ง")
+            Text(tr("ครั้งหน้าที่สร้างเครื่องใหม่จะต้องดาวน์โหลดอีกครั้ง", "The next new machine will need to download again."))
         }
         .errorAlert($errorMessage)
     }
@@ -77,12 +81,38 @@ struct SettingsView: View {
         do {
             try ImageStore.removeCache(for: item.distro)
         } catch {
-            errorMessage = "ลบไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ลบไม่สำเร็จ: \(error.localizedDescription)", "Could not delete: \(error.localizedDescription)")
         }
         refresh()
     }
 
     private func format(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+}
+
+private struct LanguageSettingsSection: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
+    @AppStorage(AppLanguage.guideStorageKey) private var guideLanguageRaw = AppLanguage.current.rawValue
+
+    var body: some View {
+        Section {
+            Picker("ภาษา / Language", selection: Binding(
+                get: { appLanguageRaw },
+                set: { value in
+                    appLanguageRaw = value
+                    guideLanguageRaw = value
+                    UserDefaults.standard.set([value], forKey: "AppleLanguages")
+                }
+            )) {
+                ForEach(AppLanguage.allCases) { language in
+                    Text(language.label).tag(language.rawValue)
+                }
+            }
+        } footer: {
+            Text(tr("เมนูด้านบนของ Mac (แก้ไข หน้าต่าง ฯลฯ) จะเปลี่ยนภาษาหลังปิดแล้วเปิด LinMO ใหม่", "The Mac menu bar menus (Edit, Window and so on) switch language after you quit and reopen LinMO"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 }

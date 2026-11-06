@@ -5,34 +5,36 @@ struct LinuxAppsMenu: View {
     @ObservedObject private var catalog = LinuxAppCatalog.shared
     @EnvironmentObject private var library: MachineLibrary
     @Environment(\.openWindow) private var openWindow
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
 
     var body: some View {
         let machines = library.machines.filter { !catalog.apps(for: $0.id).isEmpty }
         if machines.isEmpty {
-            Text("ยังไม่มีรายการแอพ")
-            Text("เปิดเครื่อง Linux ที่ติดตั้ง LinMO Agent แล้วหนึ่งครั้ง")
+            Text(tr("ยังไม่มีรายการแอพ", "No apps yet"))
+            Text(tr("เปิดเครื่อง Linux ที่ติดตั้ง LinMO Agent แล้วหนึ่งครั้ง", "Start a Linux machine with LinMO Agent installed once"))
         } else {
             ForEach(machines) { machine in
                 MachineAppsSection(machine: machine, apps: catalog.apps(for: machine.id))
             }
         }
         Divider()
-        Button("เปิด LinMO") {
+        Button(tr("เปิด LinMO", "Open LinMO")) {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
         SettingsLink {
-            Text("ตั้งค่า…")
+            Text(tr("ตั้งค่า…", "Settings…"))
         }
     }
 }
 
 private struct MachineAppsSection: View {
     @ObservedObject var machine: MachineController
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     let apps: [LinuxApp]
 
     var body: some View {
-        Section(machine.config.name + (machine.isRunning ? "" : " (ปิดอยู่)")) {
+        Section(machine.config.name + (machine.isRunning ? "" : tr(" (ปิดอยู่)", " (stopped)"))) {
             let groups = Dictionary(grouping: apps, by: \.mainCategory)
             ForEach(groups.keys.sorted { LinuxApp.categoryTitle($0) < LinuxApp.categoryTitle($1) }, id: \.self) { category in
                 Menu(LinuxApp.categoryTitle(category)) {
@@ -84,6 +86,7 @@ final class MenuBarSetting: ObservableObject {
 }
 
 struct LinuxAppsSettingsSection: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     @ObservedObject private var menuBar = MenuBarSetting.shared
     @AppStorage(LinuxAppCatalog.Keys.spotlight) private var spotlight = true
     @AppStorage(LinuxAppCatalog.Keys.launchpad) private var launchpad = false
@@ -91,24 +94,24 @@ struct LinuxAppsSettingsSection: View {
 
     var body: some View {
         Section {
-            Toggle("แสดงเมนู \"แอพ Linux\" บนแถบเมนู", isOn: menuBar.binding)
-            Toggle("ค้นหาแอพ Linux ใน Spotlight", isOn: $spotlight)
+            Toggle(tr("แสดงเมนู \"แอพ Linux\" บนแถบเมนู", "Show the \"Linux Apps\" menu in the menu bar"), isOn: menuBar.binding)
+            Toggle(tr("ค้นหาแอพ Linux ใน Spotlight", "Find Linux apps in Spotlight"), isOn: $spotlight)
                 .onChange(of: spotlight) { catalog.refreshSpotlight() }
             if LaunchpadShortcuts.isAvailable {
-                Toggle("ใส่แอพ Linux ใน Launchpad", isOn: $launchpad)
+                Toggle(tr("ใส่แอพ Linux ใน Launchpad", "Add Linux apps to Launchpad"), isOn: $launchpad)
                     .onChange(of: launchpad) { catalog.refreshLaunchpad() }
                 if launchpad {
-                    Button("แสดงทางลัดใน Finder") {
+                    Button(tr("แสดงทางลัดใน Finder", "Show Shortcuts in Finder")) {
                         NSWorkspace.shared.open(LaunchpadShortcuts.folder)
                     }
                 }
             }
         } header: {
-            Text("แอพ Linux บน Mac")
+            Text(tr("แอพ Linux บน Mac", "Linux apps on your Mac"))
         } footer: {
             Text(LaunchpadShortcuts.isAvailable
-                 ? "รู้จักแอพ \(catalog.apps.count) ตัว (อัปเดตทุกครั้งที่เปิดเครื่อง) — ทางลัดใน Launchpad อยู่ที่ ~/Applications/แอพ Linux (LinMO) เลือกแอพแล้ว LinMO จะเปิดเครื่องให้เองถ้ายังปิดอยู่"
-                 : "รู้จักแอพ \(catalog.apps.count) ตัว (อัปเดตทุกครั้งที่เปิดเครื่อง) — เลือกแอพแล้ว LinMO จะเปิดเครื่องให้เองถ้ายังปิดอยู่")
+                 ? tr("รู้จักแอพ \(catalog.apps.count) ตัว (อัปเดตทุกครั้งที่เปิดเครื่อง) — ทางลัดใน Launchpad อยู่ที่ ~/Applications/แอพ Linux (LinMO) เลือกแอพแล้ว LinMO จะเปิดเครื่องให้เองถ้ายังปิดอยู่", "\(catalog.apps.count) apps found (updated every time a machine starts). Launchpad shortcuts are in ~/Applications/แอพ Linux (LinMO). Pick an app and LinMO starts its machine if it is off.")
+                 : tr("รู้จักแอพ \(catalog.apps.count) ตัว (อัปเดตทุกครั้งที่เปิดเครื่อง) — เลือกแอพแล้ว LinMO จะเปิดเครื่องให้เองถ้ายังปิดอยู่", "\(catalog.apps.count) apps found (updated every time a machine starts). Pick an app and LinMO starts its machine if it is off."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

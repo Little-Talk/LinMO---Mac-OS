@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SnapshotsSheet: View {
+    @AppStorage(AppLanguage.storageKey) private var appLanguageRaw = AppLanguage.thai.rawValue
     @ObservedObject var machine: MachineController
     @Environment(\.dismiss) private var dismiss
 
@@ -13,16 +14,16 @@ struct SnapshotsSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Snapshot")
                     .font(.title2.bold())
-                Text("บันทึกสถานะของเครื่องไว้ ถ้าลองอะไรแล้วพังก็ย้อนกลับมาได้ทันที ใช้พื้นที่เพิ่มเฉพาะส่วนที่เปลี่ยนไป")
+                Text(tr("บันทึกสถานะของเครื่องไว้ ถ้าลองอะไรแล้วพังก็ย้อนกลับมาได้ทันที ใช้พื้นที่เพิ่มเฉพาะส่วนที่เปลี่ยนไป", "Save the machine state so you can go back right away if something breaks. Only the changes use extra space."))
                     .foregroundStyle(.secondary)
             }
             .padding(20)
 
             HStack {
-                TextField("ชื่อ snapshot (เช่น ก่อนลองโปรแกรมใหม่)", text: $newName)
+                TextField(tr("ชื่อ snapshot (เช่น ก่อนลองโปรแกรมใหม่)", "Snapshot name (for example, before trying a new program)"), text: $newName)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(create)
-                Button("บันทึกตอนนี้", action: create)
+                Button(tr("บันทึกตอนนี้", "Save Now"), action: create)
                     .disabled(machine.state != .stopped)
             }
             .padding(.horizontal, 20)
@@ -31,7 +32,7 @@ struct SnapshotsSheet: View {
             Divider()
 
             if machine.snapshots.isEmpty {
-                Text("ยังไม่มี snapshot")
+                Text(tr("ยังไม่มี snapshot", "No snapshots yet"))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -44,7 +45,7 @@ struct SnapshotsSheet: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("ย้อนกลับ") { pendingRestore = snapshot }
+                        Button(tr("ย้อนกลับ", "Restore")) { pendingRestore = snapshot }
                             .disabled(machine.state != .stopped)
                         Button {
                             pendingDelete = snapshot
@@ -52,7 +53,7 @@ struct SnapshotsSheet: View {
                             Image(systemName: "trash")
                         }
                         .buttonStyle(.borderless)
-                        .help("ลบ snapshot")
+                        .help(tr("ลบ snapshot", "Delete snapshot"))
                     }
                     .padding(.vertical, 2)
                 }
@@ -61,33 +62,33 @@ struct SnapshotsSheet: View {
             Divider()
             HStack {
                 if machine.state != .stopped {
-                    Text("ต้องปิดเครื่องก่อนจึงจะบันทึกหรือย้อนกลับได้")
+                    Text(tr("ต้องปิดเครื่องก่อนจึงจะบันทึกหรือย้อนกลับได้", "Shut down the machine before saving or restoring"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("เสร็จ") { dismiss() }
+                Button(tr("เสร็จ", "Done")) { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
             .padding(16)
         }
         .frame(width: 520, height: 460)
         .confirmationDialog(
-            "ย้อนกลับไปที่ \"\(pendingRestore?.name ?? "")\"?",
+            tr("ย้อนกลับไปที่ \"\(pendingRestore?.name ?? "")\"?", "Restore to \"\(pendingRestore?.name ?? "")\"?"),
             isPresented: Binding(get: { pendingRestore != nil }, set: { if !$0 { pendingRestore = nil } })
         ) {
-            Button("ย้อนกลับ", role: .destructive) {
+            Button(tr("ย้อนกลับ", "Restore"), role: .destructive) {
                 if let snapshot = pendingRestore { machine.restoreSnapshot(snapshot) }
                 pendingRestore = nil
             }
         } message: {
-            Text("ทุกอย่างที่เปลี่ยนหลังจาก snapshot นี้จะหายไป (ถ้าไม่แน่ใจ ให้บันทึก snapshot ของตอนนี้ไว้ก่อน)")
+            Text(tr("ทุกอย่างที่เปลี่ยนหลังจาก snapshot นี้จะหายไป (ถ้าไม่แน่ใจ ให้บันทึก snapshot ของตอนนี้ไว้ก่อน)", "Everything changed after this snapshot will be lost. (If you are not sure, save a snapshot of the current state first.)"))
         }
         .confirmationDialog(
-            "ลบ snapshot \"\(pendingDelete?.name ?? "")\"?",
+            tr("ลบ snapshot \"\(pendingDelete?.name ?? "")\"?", "Delete snapshot \"\(pendingDelete?.name ?? "")\"?"),
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })
         ) {
-            Button("ลบ", role: .destructive) {
+            Button(tr("ลบ", "Delete"), role: .destructive) {
                 if let snapshot = pendingDelete { machine.deleteSnapshot(snapshot) }
                 pendingDelete = nil
             }

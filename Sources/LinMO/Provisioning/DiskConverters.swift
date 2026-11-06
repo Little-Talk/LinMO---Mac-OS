@@ -2,6 +2,26 @@ import Compression
 import CryptoKit
 import Foundation
 
+enum DiskImageKind {
+    case iso, qcow2, raw
+
+    static func detect(at url: URL) -> DiskImageKind {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return .raw }
+        defer { try? handle.close() }
+        if let head = try? handle.read(upToCount: 4), head.count == 4, Array(head) == [0x51, 0x46, 0x49, 0xFB] {
+            return .qcow2
+        }
+        for offset: UInt64 in [0x8001, 0x8801, 0x9001] {
+            if (try? handle.seek(toOffset: offset)) != nil,
+               let magic = try? handle.read(upToCount: 5),
+               magic == Data("CD001".utf8) {
+                return .iso
+            }
+        }
+        return .raw
+    }
+}
+
 enum DiskConverters {
 
 
@@ -35,37 +55,37 @@ enum DiskConverters {
             try input.seek(toOffset: offset)
             let data = try input.read(upToCount: count) ?? Data()
             if exact && data.count != count {
-                throw LinMOError.message("ไฟล์ qcow2 ไม่สมบูรณ์")
+                throw LinMOError.message(tr("ไฟล์ qcow2 ไม่สมบูรณ์", "The qcow2 file is incomplete"))
             }
             return data
         }
 
         let header = try read(0, 104, exact: false)
         guard header.count >= 72, header.be32(0) == 0x5146_49FB else {
-            throw LinMOError.message("ไม่ใช่ไฟล์ qcow2")
+            throw LinMOError.message(tr("ไม่ใช่ไฟล์ qcow2", "Not a qcow2 file"))
         }
         let version = header.be32(4)
         guard version == 2 || version == 3 else {
-            throw LinMOError.message("ไม่รองรับ qcow2 เวอร์ชัน \(version)")
+            throw LinMOError.message(tr("ไม่รองรับ qcow2 เวอร์ชัน \(version)", "qcow2 version \(version) is not supported"))
         }
         guard header.be64(8) == 0 else {
-            throw LinMOError.message("ไม่รองรับ qcow2 ที่มี backing file")
+            throw LinMOError.message(tr("ไม่รองรับ qcow2 ที่มี backing file", "qcow2 files with a backing file are not supported"))
         }
         let clusterBits = Int(header.be32(20))
         let virtualSize = header.be64(24)
         guard header.be32(32) == 0 else {
-            throw LinMOError.message("ไม่รองรับ qcow2 ที่เข้ารหัส")
+            throw LinMOError.message(tr("ไม่รองรับ qcow2 ที่เข้ารหัส", "Encrypted qcow2 files are not supported"))
         }
         let l1Size = Int(header.be32(36))
         let l1Offset = header.be64(40)
         if version == 3, header.count >= 80 {
             let incompatible = header.be64(72)
             guard incompatible & ~UInt64(1) == 0 else {
-                throw LinMOError.message("ไฟล์ qcow2 ใช้ฟีเจอร์ที่ยังไม่รองรับ")
+                throw LinMOError.message(tr("ไฟล์ qcow2 ใช้ฟีเจอร์ที่ยังไม่รองรับ", "The qcow2 file uses features that are not supported yet"))
             }
         }
         guard (9...21).contains(clusterBits) else {
-            throw LinMOError.message("ขนาด cluster ของ qcow2 ไม่ถูกต้อง")
+            throw LinMOError.message(tr("ขนาด cluster ของ qcow2 ไม่ถูกต้อง", "Invalid qcow2 cluster size"))
         }
 
         let clusterSize = 1 << clusterBits
@@ -127,7 +147,7 @@ enum DiskConverters {
             }
         }
         guard written > 0 else {
-            throw LinMOError.message("คลายข้อมูลใน qcow2 ไม่สำเร็จ")
+            throw LinMOError.message(tr("คลายข้อมูลใน qcow2 ไม่สำเร็จ", "Could not decompress qcow2 data"))
         }
         return output
     }
@@ -153,7 +173,7 @@ enum DiskConverters {
         let fm = FileManager.default
         try? fm.removeItem(at: url)
         guard fm.createFile(atPath: url.path, contents: nil) else {
-            throw LinMOError.message("สร้างไฟล์ \(url.lastPathComponent) ไม่สำเร็จ")
+            throw LinMOError.message(tr("สร้างไฟล์ \(url.lastPathComponent) ไม่สำเร็จ", "Could not create \(url.lastPathComponent)"))
         }
         return try FileHandle(forWritingTo: url)
     }

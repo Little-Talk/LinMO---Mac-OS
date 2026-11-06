@@ -5,7 +5,7 @@ import Virtualization
 @MainActor
 final class MachineController: NSObject, ObservableObject, Identifiable {
     enum State: Equatable {
-        case stopped, starting, running, stopping
+        case stopped, starting, running, suspending, stopping
     }
 
     let bundle: MachineBundle
@@ -16,14 +16,19 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     @Published private(set) var virtualMachine: VZVirtualMachine?
     @Published private(set) var snapshots: [Snapshot] = []
     @Published private(set) var setupStatus: SetupStatus?
+    @Published private(set) var isSuspended = false
+    @Published private(set) var canSuspend = false
     @Published var errorMessage: String?
 
     private var setupListener: SetupProgressListener?
     private var displayView: VZVirtualMachineView?
     let seamless: SeamlessSession
+    let ports = PortForwarder()
     private var restartAfterSetup = false
     private let fileAccess = SecurityScopedAccess()
     private var folderWatcher: SharedFolderWatcher?
+    private var extraWatchers: [SharedFolderWatcher] = []
+    private var machineLock: MachineLock?
 
     init(bundle: MachineBundle, config: MachineConfig) {
         self.bundle = bundle
@@ -31,10 +36,14 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         self.config = config
         self.seamless = SeamlessSession(machineName: config.name)
         super.init()
+        isSuspended = bundle.hasSavedState
         reloadSnapshots()
         seamless.onAppsChanged = { [weak self] apps in
             guard let self else { return }
             LinuxAppCatalog.shared.update(machine: self.id, machineName: self.config.name, apps: apps)
+        }
+        seamless.onEnabledChanged = { [weak self] enabled in
+            self?.fitDisplay(forSeamless: enabled)
         }
     }
 
@@ -53,17 +62,21 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             seamless.prefersMacTextInput = copy.macTextInput
             seamless.prefersWayland = copy.preferWayland
         } catch {
-            errorMessage = "บันทึกการตั้งค่าไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("บันทึกการตั้งค่าไม่สำเร็จ: \(error.localizedDescription)", "Could not save settings: \(error.localizedDescription)")
         }
     }
 
     func growDisk(toGB gb: Int) {
         guard state == .stopped, gb > config.diskGB else { return }
+        guard !isSuspended else {
+            errorMessage = tr("เครื่องพักอยู่ ขยายดิสก์ไม่ได้ เปิดเครื่องแล้วปิดเครื่องก่อนจึงจะขยายดิสก์ได้", "The machine is suspended, so the disk cannot grow. Start it and shut it down first.")
+            return
+        }
         do {
             try bundle.growDisk(toGB: gb)
             update { $0.diskGB = gb }
         } catch {
-            errorMessage = "ขยายดิสก์ไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ขยายดิสก์ไม่สำเร็จ: \(error.localizedDescription)", "Could not grow the disk: \(error.localizedDescription)")
         }
     }
 
@@ -79,10 +92,18 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
 
     func start() {
         guard state == .stopped else { return }
+        let mac = bundle.macAddress().string
+        if let twin = MachineLibrary.shared.machines.first(where: { $0 !== self && $0.isRunning && $0.bundle.macAddress().string == mac }) {
+            errorMessage = tr("\"\(twin.config.name)\" เป็นต้นฉบับหรือสำเนาของเครื่องนี้และเปิดอยู่ ปิดเครื่องนั้นก่อน เพราะสองเครื่องใช้การ์ดเครือข่ายเดียวกันจะต่ออินเทอร์เน็ตชนกัน", "\"\(twin.config.name)\" is the original or a copy of this machine and is running. Shut it down first, because two machines with the same network card would conflict on the network.")
+            return
+        }
         do {
+            machineLock = try bundle.acquireLock()
             try openUserSelectedFiles()
             let configuration = try ConfigurationBuilder.make(bundle: bundle, config: config)
             try configuration.validate()
+
+            canSuspend = (try? configuration.validateSaveRestoreSupport()) != nil
 
             let machine = VZVirtualMachine(configuration: configuration)
             machine.delegate = self
@@ -94,24 +115,121 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             seamless.prefersMacTextInput = config.macTextInput
             seamless.prefersWayland = config.preferWayland
             seamless.attach(to: machine)
+            ports.attach(to: machine, sshPort: UInt16(clamping: assignSSHPort()), name: config.name)
             startFolderWatcher()
 
-            machine.start { [weak self] result in
-                Task { @MainActor in
-                    guard let self else { return }
-                    switch result {
-                    case .success:
-                        self.state = .running
-                    case .failure(let error):
-                        self.errorMessage = "เปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)"
-                        self.didStop()
-                    }
-                }
+            if bundle.hasSavedState && canSuspend {
+                resume(machine)
+            } else {
+                bundle.discardSavedState()
+                isSuspended = false
+                boot(machine)
             }
         } catch {
             fileAccess.endAll()
-            errorMessage = "ตั้งค่าเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+            machineLock = nil
+            errorMessage = tr("ตั้งค่าเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not configure the machine: \(error.localizedDescription)")
         }
+    }
+
+    private func assignSSHPort() -> Int {
+        if let port = config.sshPort { return port }
+        let used = Set(MachineLibrary.shared.machines.compactMap { $0.config.sshPort })
+        var port = 2222
+        while used.contains(port) { port += 1 }
+        update { $0.sshPort = port }
+        return port
+    }
+
+    private func boot(_ machine: VZVirtualMachine) {
+        machine.start { [weak self] result in
+            Task { @MainActor in
+                guard let self else { return }
+                switch result {
+                case .success:
+                    self.state = .running
+                case .failure(let error):
+                    self.errorMessage = tr("เปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not start the machine: \(error.localizedDescription)")
+                    self.didStop()
+                }
+            }
+        }
+    }
+
+    private func resume(_ machine: VZVirtualMachine) {
+        machine.restoreMachineStateFrom(url: bundle.savedStateURL) { [weak self] error in
+            Task { @MainActor in
+                guard let self, self.virtualMachine === machine else { return }
+                self.bundle.discardSavedState()
+                self.isSuspended = false
+                if error != nil {
+                    self.boot(machine)
+                    return
+                }
+                machine.resume { [weak self] result in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        switch result {
+                        case .success:
+                            self.state = .running
+                        case .failure(let error):
+                            self.errorMessage = tr("เปิดเครื่องต่อจากที่พักไว้ไม่สำเร็จ: \(error.localizedDescription)", "Could not resume the machine: \(error.localizedDescription)")
+                            self.forceStop()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    func suspend(completion: (() -> Void)? = nil) {
+        guard let machine = virtualMachine, state == .running, canSuspend, machine.canPause else {
+            completion?()
+            return
+        }
+        restartAfterSetup = false
+        state = .suspending
+        let url = bundle.savedStateURL
+        machine.pause { [weak self] result in
+            Task { @MainActor in
+                guard let self else { completion?(); return }
+                if case .failure(let error) = result {
+                    self.errorMessage = tr("พักเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not suspend the machine: \(error.localizedDescription)")
+                    self.state = .running
+                    completion?()
+                    return
+                }
+                machine.saveMachineStateTo(url: url) { [weak self] error in
+                    Task { @MainActor in
+                        guard let self else { completion?(); return }
+                        if let error {
+                            self.bundle.discardSavedState()
+                            self.errorMessage = tr("พักเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not suspend the machine: \(error.localizedDescription)")
+                            machine.resume { _ in
+                                Task { @MainActor in
+                                    self.state = .running
+                                    completion?()
+                                }
+                            }
+                            return
+                        }
+                        self.isSuspended = true
+                        machine.stop { _ in
+                            Task { @MainActor in
+                                self.didStop()
+                                completion?()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    func discardSuspendedState() {
+        guard state == .stopped else { return }
+        bundle.discardSavedState()
+        isSuspended = false
     }
 
     private func openUserSelectedFiles() throws {
@@ -123,7 +241,19 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
                 update { $0.sharedFolderPath = resolved.url.path; $0.sharedFolderBookmark = fresh }
             }
         } else if AppEnvironment.isSandboxed && config.sharedFolderPath != nil {
-            throw LinMOError.message("ต้องเลือกโฟลเดอร์แชร์ใหม่อีกครั้งเพื่อให้สิทธิ์ LinMO (เมนู ••• → เปลี่ยนโฟลเดอร์แชร์) หรือเลิกแชร์โฟลเดอร์")
+            throw LinMOError.message(tr("ต้องเลือกโฟลเดอร์แชร์ใหม่อีกครั้งเพื่อให้สิทธิ์ LinMO (เมนู ••• → เปลี่ยนโฟลเดอร์แชร์) หรือเลิกแชร์โฟลเดอร์", "Choose the shared folder again to give LinMO access (••• menu → Change Shared Folder…), or stop sharing it"))
+        }
+        var refreshed = config.extraFolders
+        for index in refreshed.indices {
+            guard let data = refreshed[index].bookmark, let resolved = SecurityScopedBookmark.resolve(data) else { continue }
+            fileAccess.begin(resolved.url)
+            refreshed[index].path = resolved.url.path
+            if resolved.isStale, let fresh = SecurityScopedBookmark.make(for: resolved.url) {
+                refreshed[index].bookmark = fresh
+            }
+        }
+        if refreshed != config.extraFolders {
+            update { $0.extraFolders = refreshed }
         }
         if let data = config.installerISOBookmark, let resolved = SecurityScopedBookmark.resolve(data) {
             fileAccess.begin(resolved.url)
@@ -140,6 +270,35 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             SharedFolderWatcher(path: path) { [weak self] paths in
                 Task { @MainActor in self?.seamless.notifyFolderChanges(paths) }
             }
+        }
+        extraWatchers.forEach { $0.stop() }
+        extraWatchers = config.extraFolders.compactMap { folder in
+            let name = folder.name
+            return SharedFolderWatcher(path: folder.path) { [weak self] paths in
+                let prefixed = paths.map { "\(name)/\($0)" }
+                Task { @MainActor in self?.seamless.notifyFolderChanges(prefixed, tag: SharedTags.extraFolders) }
+            }
+        }
+    }
+
+    func addExtraFolder(_ url: URL) {
+        update {
+            guard !$0.extraFolders.contains(where: { $0.path == url.path }) else { return }
+            let folder = ExtraFolder(name: ExtraFolder.uniqueName(for: url, existing: $0.extraFolders),
+                                     path: url.path,
+                                     bookmark: SecurityScopedBookmark.make(for: url))
+            $0.extraFolders.append(folder)
+        }
+    }
+
+    func removeExtraFolder(_ id: UUID) {
+        update { $0.extraFolders.removeAll { $0.id == id } }
+    }
+
+    func setExtraFolder(_ id: UUID, readOnly: Bool) {
+        update {
+            guard let index = $0.extraFolders.firstIndex(where: { $0.id == id }) else { return }
+            $0.extraFolders[index].readOnly = readOnly
         }
     }
 
@@ -165,7 +324,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
                 try machine.requestStop()
                 state = .stopping
             } catch {
-                errorMessage = "ส่งคำสั่งปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                errorMessage = tr("ส่งคำสั่งปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not send the shutdown request: \(error.localizedDescription)")
             }
         } else {
             forceStop()
@@ -180,7 +339,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             Task { @MainActor in
                 guard let self else { return }
                 if let error {
-                    self.errorMessage = "ปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+                    self.errorMessage = tr("ปิดเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not shut down the machine: \(error.localizedDescription)")
                 }
                 self.didStop()
             }
@@ -194,16 +353,43 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         let view = VZVirtualMachineView()
         view.virtualMachine = vm
         view.capturesSystemKeys = true
-        view.automaticallyReconfiguresDisplay = true
+        view.automaticallyReconfiguresDisplay = !seamless.isEnabled
         displayView = view
         return view
+    }
+
+    private var guestDisplay: VZGraphicsDisplay? {
+        virtualMachine?.graphicsDevices.first?.displays.first
+    }
+
+    private func fitDisplay(forSeamless enabled: Bool) {
+        displayView?.automaticallyReconfiguresDisplay = !enabled
+        guard enabled else { return }
+        try? guestDisplay?.reconfigure(sizeInPixels: seamlessDisplaySize())
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, self.seamless.isEnabled, let display = self.guestDisplay else { return }
+            self.displayView?.automaticallyReconfiguresDisplay = false
+            let size = self.seamlessDisplaySize()
+            guard display.sizeInPixels != size else { return }
+            try? display.reconfigure(sizeInPixels: size)
+        }
+    }
+
+    private func seamlessDisplaySize() -> CGSize {
+        let factor: CGFloat = config.hiDPI ? 2 : 1
+        let width = NSScreen.screens.map { $0.frame.width * factor }.max() ?? 1920 * factor
+        let height = NSScreen.screens.map { $0.frame.height * factor }.max() ?? 1200 * factor
+        return CGSize(width: min(max(width, 1920), 7680), height: min(max(height, 1200), 4320))
     }
 
     fileprivate func didStop() {
         folderWatcher?.stop()
         folderWatcher = nil
+        extraWatchers.forEach { $0.stop() }
+        extraWatchers = []
         fileAccess.endAll()
         seamless.detach(from: virtualMachine)
+        ports.detach()
         setupListener?.detach(from: virtualMachine)
         setupListener = nil
         if setupStatus?.finished != true {
@@ -211,10 +397,14 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
         }
         virtualMachine = nil
         displayView = nil
+        machineLock = nil
         state = .stopped
 
         if restartAfterSetup {
             restartAfterSetup = false
+            if setupStatus?.errors == 0, snapshots.isEmpty, (try? bundle.createSnapshot(named: tr("หลังติดตั้งเสร็จ", "After setup"))) != nil {
+                reloadSnapshots()
+            }
             start()
         }
     }
@@ -253,7 +443,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
     }
 
     func createSnapshot(named name: String) {
-        guard state == .stopped else { return }
+        guard state == .stopped, !isSuspended else { return }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalName = trimmed.isEmpty
             ? "Snapshot " + Date().formatted(date: .abbreviated, time: .shortened)
@@ -262,16 +452,16 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             _ = try bundle.createSnapshot(named: finalName)
             reloadSnapshots()
         } catch {
-            errorMessage = "บันทึก snapshot ไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("บันทึก snapshot ไม่สำเร็จ: \(error.localizedDescription)", "Could not save the snapshot: \(error.localizedDescription)")
         }
     }
 
     func restoreSnapshot(_ snapshot: Snapshot) {
-        guard state == .stopped else { return }
+        guard state == .stopped, !isSuspended else { return }
         do {
             try bundle.restoreSnapshot(snapshot)
         } catch {
-            errorMessage = "ย้อนกลับไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ย้อนกลับไม่สำเร็จ: \(error.localizedDescription)", "Could not restore: \(error.localizedDescription)")
         }
     }
 
@@ -280,7 +470,7 @@ final class MachineController: NSObject, ObservableObject, Identifiable {
             try bundle.deleteSnapshot(snapshot)
             reloadSnapshots()
         } catch {
-            errorMessage = "ลบ snapshot ไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ลบ snapshot ไม่สำเร็จ: \(error.localizedDescription)", "Could not delete the snapshot: \(error.localizedDescription)")
         }
     }
 }
@@ -293,7 +483,7 @@ extension MachineController: VZVirtualMachineDelegate {
 
     nonisolated func virtualMachine(_ virtualMachine: VZVirtualMachine, didStopWithError error: Error) {
         Task { @MainActor in
-            self.errorMessage = "เครื่องหยุดทำงานเพราะมีข้อผิดพลาด: \(error.localizedDescription)"
+            self.errorMessage = tr("เครื่องหยุดทำงานเพราะมีข้อผิดพลาด: \(error.localizedDescription)", "The machine stopped because of an error: \(error.localizedDescription)")
             self.didStop()
         }
     }

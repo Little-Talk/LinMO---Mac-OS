@@ -16,6 +16,22 @@ final class MachineLibrary: ObservableObject {
         machines.contains { $0.isRunning }
     }
 
+    var canSuspendAllRunning: Bool {
+        machines.contains { $0.state == .running } && machines.allSatisfy { $0.state == .stopped || ($0.state == .running && $0.canSuspend) }
+    }
+
+    func suspendAll(completion: @escaping () -> Void) {
+        let running = machines.filter { $0.state == .running }
+        guard !running.isEmpty else { completion(); return }
+        var remaining = running.count
+        for machine in running {
+            machine.suspend {
+                remaining -= 1
+                if remaining == 0 { completion() }
+            }
+        }
+    }
+
     func load() {
         let fm = FileManager.default
         try? fm.createDirectory(at: MachineBundle.machinesDirectory, withIntermediateDirectories: true)
@@ -38,6 +54,25 @@ final class MachineLibrary: ObservableObject {
         machines.append(controller)
     }
 
+    @discardableResult
+    func duplicate(_ controller: MachineController) -> MachineController? {
+        guard controller.state == .stopped, !controller.isSuspended else { return nil }
+        var config = controller.config
+        config.id = UUID()
+        config.name = controller.config.name + tr(" (สำเนา)", " (copy)")
+        config.createdAt = Date()
+        config.sshPort = nil
+        do {
+            let bundle = try controller.bundle.clone(as: config)
+            let copy = MachineController(bundle: bundle, config: config)
+            machines.append(copy)
+            return copy
+        } catch {
+            errorMessage = tr("ทำสำเนาเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not duplicate the machine: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     func delete(_ controller: MachineController) {
         guard !controller.isRunning else { return }
         do {
@@ -45,7 +80,7 @@ final class MachineLibrary: ObservableObject {
             machines.removeAll { $0.id == controller.id }
             LinuxAppCatalog.shared.removeMachine(controller.id)
         } catch {
-            errorMessage = "ลบเครื่องไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ลบเครื่องไม่สำเร็จ: \(error.localizedDescription)", "Could not delete the machine: \(error.localizedDescription)")
         }
     }
 
@@ -79,7 +114,7 @@ final class MachineLibrary: ObservableObject {
             try bundle.save(config)
             try? fm.removeItem(at: newURL.appendingPathComponent("settings.json"))
         } catch {
-            errorMessage = "ย้ายเครื่องจากเวอร์ชันเก่าไม่สำเร็จ: \(error.localizedDescription)"
+            errorMessage = tr("ย้ายเครื่องจากเวอร์ชันเก่าไม่สำเร็จ: \(error.localizedDescription)", "Could not migrate machines from the old version: \(error.localizedDescription)")
         }
     }
 }

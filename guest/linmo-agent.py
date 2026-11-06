@@ -14,7 +14,7 @@ import sys
 import time
 import zlib
 
-from Xlib import X, Xatom, display, error
+from Xlib import X, Xatom, Xutil, display, error
 from Xlib.ext import composite, xtest
 from Xlib.protocol import event as xevent
 
@@ -28,7 +28,7 @@ try:
 except ImportError:
     xfixes = None
 
-VERSION = 6
+VERSION = 10
 FEATURES = ["damage", "icons", "text", "drop", "scale", "shm", "dragout", "folders"]
 HOST_CID = 2
 PORT = int(os.environ.get("LINMO_AGENT_PORT", "5200"))
@@ -436,13 +436,39 @@ class Desktop:
         except error.XError:
             return 0
 
-    def geometry(self, win):
+    def raw_geometry(self, win):
         try:
             geo = win.get_geometry()
             pos = win.translate_coords(self.root, 0, 0)
             return -pos.x, -pos.y, geo.width, geo.height
         except error.XError:
             return None
+
+    def insets(self, win):
+        value = self._prop(win, "_GTK_FRAME_EXTENTS", Xatom.CARDINAL)
+        if value is not None and len(value) >= 4:
+            return tuple(max(0, int(v)) for v in value[:4])
+        return 0, 0, 0, 0
+
+    def geometry(self, win):
+        geo = self.raw_geometry(win)
+        if not geo:
+            return None
+        x, y, w, h = geo
+        left, right, top, bottom = self.insets(win)
+        if w - left - right < 1 or h - top - bottom < 1:
+            return geo
+        return x + left, y + top, w - left - right, h - top - bottom
+
+    def min_size(self, win):
+        try:
+            hints = win.get_wm_normal_hints()
+        except error.XError:
+            return 0, 0
+        if not hints or not (hints.flags & Xutil.PMinSize):
+            return 0, 0
+        left, right, top, bottom = self.insets(win)
+        return max(0, hints.min_width - left - right), max(0, hints.min_height - top - bottom)
 
     def popups(self):
         result = []
@@ -544,11 +570,49 @@ class Desktop:
             self.client_message(win, "_NET_MOVERESIZE_WINDOW", [flags, nx, ny, 0, 0])
             self.d.sync()
 
-    def resize(self, wid, w, h):
+    def workarea(self):
         sw, sh = self.screen_size
-        w, h = max(1, min(int(w), sw)), max(1, min(int(h), sh))
+        value = self._prop(self.root, "_NET_WORKAREA", Xatom.CARDINAL)
+        if value is not None and len(value) >= 4 and value[2] > 0 and value[3] > 0:
+            return int(value[0]), int(value[1]), min(int(value[2]), sw), min(int(value[3]), sh)
+        return 0, 0, sw, sh
+
+    def frame_extents(self, win):
+        value = self._prop(win, "_NET_FRAME_EXTENTS", Xatom.CARDINAL)
+        if value is not None and len(value) >= 4:
+            return tuple(int(v) for v in value[:4])
+        return 0, 0, 0, 0
+
+    def unmaximize(self, win):
+        state = self._prop(win, "_NET_WM_STATE", Xatom.ATOM)
+        maximized = [self.atom("_NET_WM_STATE_MAXIMIZED_VERT"), self.atom("_NET_WM_STATE_MAXIMIZED_HORZ")]
+        fullscreen = self.atom("_NET_WM_STATE_FULLSCREEN")
+        if state is None:
+            return
+        if any(a in state for a in maximized):
+            self.client_message(win, "_NET_WM_STATE", [0, maximized[0], maximized[1], 2, 0])
+        if fullscreen in state:
+            self.client_message(win, "_NET_WM_STATE", [0, fullscreen, 0, 2, 0])
+
+    def resize(self, wid, w, h):
+        win = self.window(wid)
+        ax, ay, aw, ah = self.workarea()
+        left, right, top, bottom = self.frame_extents(win)
+        il, ir, it, ib = self.insets(win)
+        w = max(1, min(int(w), aw - left - right))
+        h = max(1, min(int(h), ah - top - bottom))
+        self.unmaximize(win)
         flags = (1 << 10) | (1 << 11) | (2 << 12)
-        self.client_message(self.window(wid), "_NET_MOVERESIZE_WINDOW", [flags, 0, 0, w, h])
+        data = [flags, 0, 0, w + il + ir, h + it + ib]
+        geo = self.geometry(win)
+        if geo:
+            x, y = geo[0], geo[1]
+            nx = min(max(x, ax + left), ax + aw - right - w)
+            ny = min(max(y, ay + top), ay + ah - bottom - h)
+            if (nx, ny) != (x, y):
+                data = [flags | (1 << 8) | (1 << 9) | 10, nx - il, ny - it, w + il + ir, h + it + ib]
+        self.client_message(win, "_NET_MOVERESIZE_WINDOW", data)
+        self.d.sync()
 
     def close(self, wid):
         self.client_message(self.window(wid), "_NET_CLOSE_WINDOW", [X.CurrentTime, 2, 0, 0, 0])
@@ -1199,7 +1263,8 @@ class FolderSync:
     RESCAN_INTERVAL = 20.0
     MAX_CHILDREN = 512
 
-    def __init__(self):
+    def __init__(self, tag="linmo"):
+        self.TAG = tag
         self.root = None
         self.dev = None
         self.watches = {}
@@ -1499,6 +1564,7 @@ class Tracked:
         self.needs_full = True
         self.crc = None
         self.icon_sent = False
+        self.offset = (0, 0)
 
 
 class Agent:
@@ -1514,7 +1580,7 @@ class Agent:
         self.activated = 0
 
     def start(self):
-        w, h = self.x.screen_size
+        _, _, w, h = self.x.workarea()
         features = FEATURES + (["clipboard", "clipboard-image"] if self.x.clipboard.available else [])
         self.ch.send(MSG_HELLO, {"version": VERSION, "features": features, "screen": [w, h],
                                  "session": os.environ.get("XDG_SESSION_TYPE", "x11")})
@@ -1531,9 +1597,11 @@ class Agent:
             geo = self.x.geometry(win)
             if not geo or geo[2] <= 1 or geo[3] <= 1:
                 continue
+            min_w, min_h = self.x.min_size(win)
             found[wid] = {
                 "id": wid, "kind": "normal", "title": self.x.title(win), "app": self.x.app_id(win),
                 "x": geo[0], "y": geo[1], "w": geo[2], "h": geo[3], "parent": self.x.transient_for(win),
+                "minW": min_w, "minH": min_h,
             }
         for win, geo in self.x.popups():
             found[win.id] = {
@@ -1551,7 +1619,11 @@ class Agent:
                 tracked = self.windows[wid] = Tracked(info)
                 self.watch(wid, tracked)
                 self.ch.send(MSG_WINDOW, info)
-            elif tracked.info != info:
+            left, _, top, _ = self.x.insets(self.x.window(wid))
+            if tracked.offset != (left, top):
+                tracked.offset = (left, top)
+                tracked.needs_full = True
+            if tracked.info != info:
                 if (tracked.info["w"], tracked.info["h"]) != (info["w"], info["h"]):
                     tracked.needs_full = True
                 tracked.info = info
@@ -1592,7 +1664,8 @@ class Agent:
                 if tracked is None:
                     continue
                 a = ev.area
-                rect = (a.x, a.y, a.x + a.width, a.y + a.height)
+                left, top = tracked.offset
+                rect = (a.x - left, a.y - top, a.x - left + a.width, a.y - top + a.height)
                 if tracked.dirty is None:
                     tracked.dirty = rect
                 else:
@@ -1612,6 +1685,7 @@ class Agent:
                 return
             info = tracked.info
             w, h = info["w"], info["h"]
+            ox, oy = tracked.offset
 
             if tracked.damage is not None and not tracked.needs_full:
                 if tracked.dirty is None:
@@ -1624,7 +1698,7 @@ class Agent:
                 if x1 <= x0 or y1 <= y0:
                     continue
                 if (x1 - x0) * (y1 - y0) < FULL_FRAME_RATIO * w * h:
-                    pixels = self.x.capture(self.x.window(wid), x0, y0, x1 - x0, y1 - y0)
+                    pixels = self.x.capture(self.x.window(wid), x0 + ox, y0 + oy, x1 - x0, y1 - y0)
                     if pixels is not None:
                         header = struct.pack("<IIIIIIII", wid, w, h, x0, y0, x1 - x0, y1 - y0, (x1 - x0) * 4)
                         self.ch.send(MSG_FRAME_RECT, header + pixels)
@@ -1633,7 +1707,7 @@ class Agent:
             if tracked.damage is not None:
                 tracked.dirty = None
                 self.x.d.damage_subtract(tracked.damage)
-            pixels = self.x.capture(self.x.window(wid), 0, 0, w, h)
+            pixels = self.x.capture(self.x.window(wid), ox, oy, w, h)
             if pixels is None:
                 continue
             if tracked.damage is None:
@@ -1711,7 +1785,7 @@ class Agent:
                     pass
             self.x.clipboard.set_from_mac(text if isinstance(text, str) and text else None, png)
         elif kind == MSG_FOLDER_CHANGED:
-            self.folders.changed(msg.get("paths"))
+            self.folders.changed(msg.get("paths"), msg.get("tag"))
         elif kind == MSG_CONFIG:
             if "scale" in msg:
                 apply_scale(float(msg["scale"]))
@@ -1736,12 +1810,14 @@ class Agent:
                            self.last_frame + FRAME_INTERVAL if self.streaming else float("inf"),
                            self.folders.deadline())
             wait_w = [self.ch] if self.ch.outbox else []
-            wait_r = [self.ch, x_fd] + ([self.folders] if self.folders.fd >= 0 else [])
+            folder_readers = self.folders.readers()
+            wait_r = [self.ch, x_fd] + folder_readers
             readable, writable, _ = select.select(wait_r, wait_w, [], max(0.0, deadline - now))
             if writable:
                 self.ch.flush()
-            if self.folders in readable:
-                self.folders.read_local()
+            for sync in folder_readers:
+                if sync in readable:
+                    sync.read_local()
             if self.ch in readable:
                 for kind, msg in self.ch.receive():
                     try:
@@ -1756,6 +1832,8 @@ class Agent:
                 log("folder refresh failed:", exc)
             if now - self.last_scan >= SCAN_INTERVAL:
                 self.last_scan = now
+                if agent_replaced():
+                    raise Restart()
                 self.scan()
                 self.drain_x_events()
             if self.streaming and now - self.last_frame >= FRAME_INTERVAL:
@@ -1771,6 +1849,58 @@ class Agent:
             pass
 
 
+class FolderGroup:
+    def __init__(self, syncs):
+        self.syncs = syncs
+
+    def readers(self):
+        return [sync for sync in self.syncs if sync.fd >= 0]
+
+    def changed(self, paths, tag=None):
+        tag = tag or FolderSync.TAG
+        for sync in self.syncs:
+            if sync.TAG == tag:
+                sync.changed(paths)
+
+    def deadline(self):
+        return min(sync.deadline() for sync in self.syncs)
+
+    def tick(self, now):
+        for sync in self.syncs:
+            try:
+                sync.tick(now)
+            except OSError as exc:
+                log("folder refresh failed:", exc)
+
+
+class Restart(Exception):
+    pass
+
+
+AGENT_PATH = os.path.abspath(__file__)
+
+
+def agent_stamp():
+    try:
+        st = os.stat(AGENT_PATH)
+        return (st.st_ino, st.st_mtime_ns)
+    except OSError:
+        return None
+
+
+STARTED_STAMP = agent_stamp()
+
+
+def agent_replaced():
+    stamp = agent_stamp()
+    return stamp is not None and stamp != STARTED_STAMP
+
+
+def restart_agent():
+    log("agent was updated, restarting")
+    os.execv(sys.executable, [sys.executable, AGENT_PATH] + sys.argv[1:])
+
+
 def main():
     try:
         desktop = Desktop()
@@ -1779,21 +1909,28 @@ def main():
         return 1
     log("started on", os.environ.get("DISPLAY"), "screen", desktop.screen_size,
         "damage" if desktop.damage_event else "no-damage")
-    folders = FolderSync()
+    folders = FolderGroup([FolderSync("linmo"), FolderSync("linmo-extra")])
     while True:
+        if agent_replaced():
+            restart_agent()
         channel = connect()
         if channel is None:
             time.sleep(2)
             continue
         log("connected to LinMO")
         agent = Agent(desktop, channel, folders)
+        replaced = False
         try:
             agent.run()
+        except Restart:
+            replaced = True
         except (EOFError, OSError) as exc:
             log("disconnected:", exc)
         finally:
             agent.stop()
             channel.close()
+        if replaced:
+            restart_agent()
         time.sleep(1)
 
 
