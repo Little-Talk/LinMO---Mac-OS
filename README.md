@@ -4,7 +4,7 @@
 
 > สถานะ: **v0.10 (เวอร์ชันทดลอง)** — แอพ Linux อยู่ใน Launchpad, Spotlight และเมนู "แอพ Linux" บนแถบเมนู,
 > ชุดสำเร็จรูป (สายเรียน Linux / สาย dev / สาย security lab / สาย data science / สายออกแบบ), copy-paste รูปภาพ และเตรียมพร้อมส่งขึ้น Mac App Store
-> แผนพัฒนาต่อดู [docs/ROADMAP.md](docs/ROADMAP.md)
+> พักเครื่องแล้วกลับมาที่เดิม, ใช้พอร์ตและ SSH ของ Linux จาก Mac, Docker จาก Mac, ไมโครโฟน, แชร์หลายโฟลเดอร์, ทำสำเนาเครื่อง และติดตั้ง Wine คลิกเดียว
 
 ## ฟีเจอร์
 
@@ -27,12 +27,20 @@
 - **ดูความคืบหน้าการตั้งค่าครั้งแรก** — แถบด้านล่างหน้าจอบอกเปอร์เซ็นต์และขั้นตอนที่กำลังทำ
 - **ภาษาไทยพร้อมใช้** — ฟอนต์ไทย, คีย์บอร์ดไทย (XFCE: Option + Shift, GNOME: Cmd + Space), เลือกเมนูไทยได้
 - **เข้าระบบอัตโนมัติ** — เปิดเครื่องแล้วเข้าหน้าจอ desktop เลย
-- **แชร์โฟลเดอร์** — โฟลเดอร์จาก Mac โผล่ที่ `~/Mac` ใน Linux อัตโนมัติ
+- **แชร์โฟลเดอร์** — โฟลเดอร์จาก Mac โผล่ที่ `~/Mac` ใน Linux อัตโนมัติ เพิ่มโฟลเดอร์อื่นได้อีกที่ `~/MacFolders/<ชื่อ>`
+  (เลือกอ่านอย่างเดียวได้) เปลี่ยนไฟล์ใน Finder แล้วตัวจัดการไฟล์ใน Linux อัปเดตทันที
 - **แชร์ clipboard** — copy บน Mac แล้ว paste ใน Linux ได้ (และกลับกัน)
-- **Snapshot** — บันทึกสถานะเครื่อง ทำพังแล้วย้อนกลับได้ในไม่กี่วินาที
-- **Rosetta** — รันโปรแกรม Linux แบบ x86_64 ได้
+- **พักเครื่อง** — กด **พักเครื่อง** แล้วเปิดต่อได้ที่เดิมในไม่กี่วินาที ทั้งแอพและไฟล์ที่เปิดค้างไว้
+- **Snapshot** — บันทึกสถานะเครื่อง ทำพังแล้วย้อนกลับได้ในไม่กี่วินาที เครื่องแบบคลิกเดียวมี snapshot "หลังติดตั้งเสร็จ" ให้อัตโนมัติ
+- **ทำสำเนาเครื่อง** — สร้างเครื่องใหม่ที่เหมือนเดิมทุกอย่าง ใช้พื้นที่เพิ่มเฉพาะส่วนที่ต่างกัน
+- **พอร์ตและ SSH** — โปรแกรมที่เปิดพอร์ตใน Linux ใช้จาก Mac ได้ที่ `localhost` พอร์ตเดียวกัน และ SSH เข้า Linux ได้ที่ `localhost:2222` (เครื่องถัดไป 2223, 2224…)
+- **Docker จาก Mac** — สั่ง `docker` บน Mac ให้ทำงานกับ Docker ใน Linux ได้
+- **ไมโครโฟน** — ให้ Linux ใช้ไมโครโฟนของ Mac ได้ (เปิดในตั้งค่าเครื่อง)
+- **Rosetta** — รันโปรแกรม Linux แบบ x86_64 ได้ เปิดตอนสร้างเครื่องหรือเปิดทีหลังก็ได้
+- **โปรแกรม Windows** — ติดตั้ง Wine คลิกเดียว เลือก Hangover (32 และ 64 บิต) หรือ WineHQ + Rosetta (64 บิต เร็วกว่า)
+- **LinMO Tools อัปเดตเอง** — เปิดเครื่องแล้ว agent ใน Linux อัปเดตเป็นรุ่นที่มากับแอพให้เอง
 - **หลายเครื่อง** — สร้างได้หลายเครื่องในแอพเดียว
-- **ติดตั้งเองจาก ISO** — ใช้ distro อื่นที่เป็น ARM64 ได้ เช่น Ubuntu, Fedora
+- **ติดตั้งเองจากไฟล์** — ใช้ distro อื่นที่เป็น ARM64 ได้ จากไฟล์ ISO หรือไฟล์ดิสก์ `.img`, `.raw`, `.qcow2`
 
 ## สิ่งที่ต้องมี
 
@@ -44,8 +52,8 @@
 ## วิธี build และเปิดแอพ
 
 ```bash
-git clone https://github.com/jeerapatsepu/LinMO.git
-cd LinMO
+git clone https://github.com/Little-Talk/LinMO---Mac-OS.git
+cd LinMO---Mac-OS
 ./scripts/build-app.sh release --run
 ```
 
@@ -55,7 +63,8 @@ cd LinMO
 > `com.apple.security.virtualization` ให้ใช้สคริปต์ด้านบน ซึ่งเซ็นสิทธิ์ให้อัตโนมัติ
 
 ทดสอบรุ่น App Store (เปิด App Sandbox) บนเครื่องตัวเอง: `./scripts/build-app.sh sandbox --run`
-ขั้นตอนส่งขึ้น Mac App Store ดู [docs/APP_STORE.md](docs/APP_STORE.md)
+build รุ่นส่งขึ้น Mac App Store: ตั้งตัวแปร `SIGN_IDENTITY`, `INSTALLER_IDENTITY`, `TEAM_ID` และ `PROVISIONING_PROFILE`
+แล้วสั่ง `./scripts/build-app.sh appstore` จะได้ `build/LinMO.pkg` ไว้อัปโหลดด้วย Transporter
 
 ## วิธีใช้งาน
 
@@ -67,6 +76,7 @@ cd LinMO
 3. รอดาวน์โหลด (ครั้งแรกประมาณ 450–600 MB ครั้งต่อไปใช้ไฟล์เดิมได้ทันที)
 4. กด **เปิดเครื่อง** — ครั้งแรก Linux จะติดตั้งหน้าจอและภาษาไทยเอง ใช้เวลาประมาณ 10–30 นาที
    ดูความคืบหน้าได้ที่แถบด้านล่างของหน้าจอ เมื่อเสร็จแอพจะเปิดเครื่องใหม่เข้าหน้าจอ desktop ให้เอง
+   และบันทึก snapshot ชื่อ **หลังติดตั้งเสร็จ** ไว้ให้ ย้อนกลับมาเป็นเครื่องใหม่เอี่ยมได้ทุกเมื่อ
 
 > Fedora มีให้เฉพาะ XFCE เพราะ GNOME ของ Fedora รุ่นใหม่ใช้ Wayland อย่างเดียว ซึ่งยังแชร์ clipboard กับ Mac ไม่ได้
 
@@ -93,9 +103,14 @@ Control+คลิก = คลิกขวา, Cmd+Q ยังเป็นกา�
 ถ้าเครื่องยังปิดอยู่ LinMO จะเปิดเครื่องให้ แล้วเปิดแอพเป็นหน้าต่างแยกเมื่อ Linux พร้อม
 ปิด/เปิดแต่ละอย่างได้ที่ LinMO → Settings…
 
-ถ้าแอพขึ้นปุ่มอัปเดต agent (ลูกศรสีส้ม) ให้คลิกแล้วคัดลอกคำสั่งไปวางใน Terminal ของ Linux
+### LinMO Agent และ LinMO Tools
 
 เครื่องที่สร้างด้วยตัวช่วยติดตั้งตั้งแต่ v0.4 มี LinMO Agent ให้แล้ว
+และตั้งแต่ติดตั้ง LinMO Tools รุ่นที่อัปเดตเองได้ ทุกครั้งที่เปิดเครื่อง Linux จะอัปเดต agent ให้ตรงกับแอพเอง ไม่ต้องรันคำสั่งซ้ำ
+
+ถ้าแอพขึ้นลูกศรสีส้มที่ปุ่ม **หน้าต่างแยก** แปลว่าเครื่องนั้นยังเป็น agent รุ่นเก่าที่อัปเดตเองไม่ได้
+ให้รีสตาร์ตเครื่อง คลิกปุ่ม แล้วคัดลอกคำสั่งไปวางใน Terminal ของ Linux จากนั้นออกจากระบบแล้วเข้าใหม่ (ทำครั้งเดียว)
+
 เครื่องที่สร้างก่อนหน้านั้นหรือติดตั้งจาก ISO: กดปุ่ม **หน้าต่างแยก** แล้วคัดลอกคำสั่งติดตั้งไปวางใน Terminal ของ Linux
 (แอพต่อแผ่น LinMO Tools ให้ทุกเครื่องอยู่แล้ว) จากนั้นออกจากระบบแล้วเข้าใหม่
 
@@ -109,6 +124,8 @@ LinMO มี compositor Wayland ของตัวเอง (**linmo-wayland**) 
 - เปิดใช้: ปิดเครื่อง → ตั้งค่าเครื่อง → **เปิดแอพผ่าน Wayland (ทดลอง)**
 - ถ้า Linux ใช้ Wayland อย่างเดียว (เช่น Fedora GNOME, Ubuntu 25.10+) LinMO จะใช้ linmo-wayland ให้อัตโนมัติ
 - รองรับ copy-paste (ข้อความ + รูปภาพ), ลากไฟล์เข้า/ออก, ไอคอนหน้าต่าง, เมนู, พิมพ์ไทย/ญี่ปุ่น และแอพ X11 ผ่าน Xwayland
+- รองรับ `wp_viewporter` และ fractional scale แอพอย่าง Firefox จึงแสดงขนาดถูกต้องบนจอ Retina และคลิกตรงตำแหน่ง
+- หน้าต่าง X11 ปรับขนาดตามหน้าต่าง Mac และเคารพขนาดเล็กสุดของแอพ
 - ข้อจำกัดของแอพ X11 ในโหมดนี้: copy รูปจากแอพ X11 ไป Mac ไม่ได้ และ paste จาก Mac ได้ไม่เกิน 64 KB ต่อครั้ง
   (ข้อจำกัดของ Smithay 0.7 — แอพ X11 ในโหมด X11 agent ปกติไม่มีข้อจำกัดนี้)
 
@@ -117,13 +134,67 @@ LinMO มี compositor Wayland ของตัวเอง (**linmo-wayland**) 
 
 ทดสอบบนเครื่อง Linux ใดก็ได้: `python3 guest/tests/wayland_smoke.py guest/linmo-wayland/target/release/linmo-wayland`
 
-### ติดตั้งเองจาก ISO
+### พักเครื่อง (suspend)
 
-1. กด **+** → **ติดตั้งเองจากไฟล์ ISO** → เลือกไฟล์ ISO รุ่น **ARM64 / aarch64**
-2. เปิดเครื่อง แล้วติดตั้งตามขั้นตอนของ distro
+- ขณะเครื่องเปิดอยู่ กด **พักเครื่อง** ที่แถบด้านบน LinMO เก็บหน่วยความจำของเครื่องไว้ในไฟล์ แล้วปิดเครื่อง
+- กด **เปิดต่อ** เพื่อกลับมาที่เดิมในไม่กี่วินาที ทั้งแอพและไฟล์ที่เปิดค้างไว้
+- ปิดแอพ LinMO ขณะเครื่องเปิดอยู่ แอพจะถามว่าจะ **พักเครื่องแล้วปิดแอพ** หรือไม่
+- ระหว่างพักอยู่ ทำ snapshot, ตั้งค่าเครื่อง, แชร์โฟลเดอร์ และทำสำเนาไม่ได้ ให้เปิดต่อแล้วปิดเครื่องก่อน
+  หรือเลือก **…** → **ทิ้งสถานะที่พักไว้…** (เหมือนถอดปลั๊ก งานที่ยังไม่บันทึกจะหาย)
+
+### พอร์ต, SSH และ Docker จาก Mac
+
+เมื่อเครื่องเปิดอยู่และมี LinMO Tools รุ่นใหม่ ปุ่ม **พอร์ต** ที่แถบด้านบนจะแสดงโปรแกรมใน Linux ที่เปิดพอร์ตรอรับการเชื่อมต่อ
+พร้อมชื่อโปรแกรม (ซ่อนพอร์ตของระบบให้แล้ว)
+
+- **เว็บ** — เช่นรัน `python3 -m http.server 8000` ใน Linux แล้วเปิด `http://localhost:8000` บน Mac หรือคลิกจากเมนู **พอร์ต**
+- **SSH** — LinMO ติดตั้ง OpenSSH ให้ และส่งพอร์ต 22 มาที่ Mac พอร์ต 2222 (เครื่องถัดไปได้ 2223, 2224…)
+  คัดลอกคำสั่งจากเมนู **พอร์ต** → **คัดลอกคำสั่ง SSH** เช่น `ssh -p 2222 ชื่อผู้ใช้@localhost`
+  ใช้การเชื่อมต่อนานๆ (เช่น VS Code Remote-SSH, scp ไฟล์ใหญ่) ได้โดยไม่หลุด
+- **Docker** — ถ้าใน Linux มี Docker (เช่นชุดสาย dev) LinMO จะเปิด socket ไว้ที่ `~/.linmo/<ชื่อเครื่อง>.sock` บน Mac
+  เลือก **พอร์ต** → **คัดลอกคำสั่งใช้ Docker ของ Linux จาก Mac** แล้ววางใน Terminal ของ Mac
+  คำสั่งนี้สร้าง docker context `linmo-<ชื่อเครื่อง>` จากนั้น `docker ps`, `docker run` บน Mac จะทำงานกับ Docker ใน Linux
+  (ต้องมีคำสั่ง `docker` บน Mac เช่นจาก `brew install docker`)
+
+### ไมโครโฟน
+
+ปิดเครื่อง → **…** → **ตั้งค่าเครื่อง…** → เปิด **ให้ Linux ใช้ไมโครโฟนของ Mac** แล้วอนุญาตเมื่อ macOS ถาม
+ถ้าเคยกดไม่อนุญาต เปิดได้ที่ System Settings → Privacy & Security → Microphone
+
+### แชร์โฟลเดอร์เพิ่มเติม
+
+ปิดเครื่อง → **…** → **โฟลเดอร์แชร์เพิ่มเติม…** → **เพิ่มโฟลเดอร์…**
+แต่ละโฟลเดอร์จะอยู่ที่ `~/MacFolders/<ชื่อโฟลเดอร์>` ใน Linux เลือก **อ่านอย่างเดียว** ได้ มีผลเมื่อเปิดเครื่องครั้งถัดไป
+และอัปเดตทันทีเมื่อไฟล์ใน Finder เปลี่ยนเหมือน `~/Mac`
+
+### ทำสำเนาเครื่อง
+
+ปิดเครื่อง → **…** → **ทำสำเนาเครื่อง** จะได้เครื่อง "<ชื่อ> (สำเนา)" ที่มีทุกอย่างเหมือนเดิม
+สำเนาใช้ APFS clone จึงเสร็จเร็วและใช้พื้นที่เพิ่มเฉพาะส่วนที่ต่างกัน
+
+> สำเนาใช้การ์ดเครือข่าย (MAC address) เดียวกับต้นฉบับ จึงเปิดพร้อมกันไม่ได้ ต้องปิดเครื่องหนึ่งก่อน
+
+### โปรแกรม Windows (Wine)
+
+เปิดเครื่อง (Debian หรือ Ubuntu) → กดปุ่ม **Wine** → เลือกแบบ → **คัดลอกคำสั่ง** แล้ววางใน Terminal ของ Linux
+
+- **Hangover** — เปิดโปรแกรม Windows ได้ทั้ง 32 และ 64 บิต ไม่ต้องใช้ Rosetta แนะนำสำหรับโปรแกรมส่วนใหญ่
+- **WineHQ + Rosetta** — เร็วกว่า แต่เปิดได้เฉพาะโปรแกรม 64 บิต และต้องเปิด Rosetta ก่อน
+  (Rosetta แปลได้เฉพาะ x86_64 ไม่รองรับ i386 LinMO จึงติดตั้ง WineHQ รุ่น amd64)
+
+ติดตั้งเสร็จแล้วดับเบิลคลิกไฟล์ `.exe` / `.msi` หรือสั่ง `wine โปรแกรม.exe` ติดตั้งได้ทีละแบบ ลงแบบหนึ่งแล้วอีกแบบจะถูกถอดออก
+
+### ติดตั้งเองจากไฟล์ ISO หรือดิสก์
+
+1. กด **+** → **ติดตั้งเองจากไฟล์ ISO หรือ IMG** → เลือกไฟล์รุ่น **ARM64 / aarch64**
+   - `.iso` — ใช้เป็นแผ่นติดตั้ง
+   - `.img` / `.raw` — เลือกได้ว่าจะใช้เป็นแผ่นติดตั้ง (live USB) หรือเป็นดิสก์ของเครื่องที่บูตได้เลย (เช่นไฟล์ของ Armbian)
+   - `.qcow2` — แปลงเป็นดิสก์ของเครื่องแล้วบูตได้เลย
+   ไฟล์ต้นฉบับไม่ถูกแก้ ดิสก์ของเครื่องจะถูกขยายเป็นขนาดที่ตั้งไว้
+2. เปิดเครื่อง ถ้าเป็นแผ่นติดตั้ง ให้ติดตั้งตามขั้นตอนของ distro
 3. ติดตั้งเสร็จ ปิดเครื่อง กด **ถอดแผ่นติดตั้ง** แล้วเปิดใหม่
 
-เครื่องแบบนี้ต้องตั้งค่าบางอย่างใน Linux เอง:
+เครื่องแบบนี้ต้องติดตั้ง LinMO Tools เอง (ดูหัวข้อ LinMO Agent ด้านบน) และอาจต้องตั้งค่าบางอย่างใน Linux เอง:
 
 ```bash
 # clipboard
@@ -135,27 +206,20 @@ echo 'linmo /mnt/linmo virtiofs rw,nofail 0 0' | sudo tee -a /etc/fstab
 sudo mount -a
 ```
 
-### Rosetta (สำหรับเครื่องที่ติดตั้งจาก ISO หรือเปิดใช้ทีหลัง)
+### Rosetta (เปิดใช้ทีหลัง)
 
-เปิด Rosetta ในหน้า **ตั้งค่าเครื่อง** แล้วใน Linux สั่ง:
+Rosetta รันโปรแกรม Linux แบบ x86_64 ได้ แต่ไม่รองรับโปรแกรม 32 บิต (i386)
 
-```bash
-sudo mkdir -p /media/rosetta
-echo 'rosetta /media/rosetta virtiofs ro,nofail 0 0' | sudo tee -a /etc/fstab
-sudo mount -a
-sudo /usr/sbin/update-binfmts --install rosetta /media/rosetta/rosetta \
-  --magic "\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00" \
-  --mask "\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff" \
-  --credentials yes --preserve no --fix-binary yes
-```
-
-(ต้องมีแพ็กเกจ `binfmt-support` บน Debian/Ubuntu)
+1. ปิดเครื่อง → **…** → **ตั้งค่าเครื่อง…** → เปิด **รันโปรแกรม x86_64 ผ่าน Rosetta** (แอพจะติดตั้ง Rosetta ให้ Mac ถ้ายังไม่มี)
+2. เปิดเครื่องใหม่
+3. รันคำสั่งติดตั้ง LinMO Tools ใน Terminal ของ Linux อีกครั้ง LinMO Tools จะ mount Rosetta และลงทะเบียน binfmt ให้เอง
 
 ## ไฟล์เก็บไว้ที่ไหน
 
 | ที่อยู่ | คืออะไร |
 |---|---|
-| `~/Library/Application Support/LinMO/Machines/<id>.vmbundle/` | เครื่องแต่ละเครื่อง (ดิสก์, NVRAM, config, snapshot) |
+| `~/Library/Application Support/LinMO/Machines/<id>.vmbundle/` | เครื่องแต่ละเครื่อง (ดิสก์, NVRAM, config, snapshot, สถานะที่พักไว้ `SavedState.vzvmsave`, ไฟล์ล็อก `Machine.lock`) |
+| `~/.linmo/<ชื่อเครื่อง>.sock` | socket สำหรับใช้ Docker ของ Linux จาก Mac (มีเฉพาะตอนเครื่องเปิดอยู่) |
 | `~/Library/Caches/LinMO/` | ไฟล์ Linux ที่ดาวน์โหลดไว้ ดูขนาดและลบได้ที่ **LinMO → Settings…** |
 | `~/Library/Application Support/LinMO/LinuxApps.json` | รายการแอพ Linux ที่จำไว้ (สำหรับ Spotlight, เมนู และ Launchpad) |
 | `~/Applications/แอพ Linux (LinMO)/` | ทางลัดของแอพ Linux ใน Launchpad (ถ้าเปิดใช้) |
@@ -171,14 +235,17 @@ Sources/LinMO/
 ├── LinMOApp.swift
 ├── Model/
 │   ├── MachineConfig.swift        การตั้งค่าเครื่อง, Snapshot
-│   ├── MachineBundle.swift        ไฟล์ของเครื่อง, สร้าง/ลบ, snapshot ด้วย APFS clone
+│   ├── MachineBundle.swift        ไฟล์ของเครื่อง, สร้าง/ลบ/ทำสำเนา, snapshot ด้วย APFS clone
+│   ├── MachineLock.swift          ล็อกเครื่องไม่ให้แอพสองตัวเปิดดิสก์เดียวกัน
 │   └── SecurityScopedBookmark.swift  สิทธิ์ไฟล์/โฟลเดอร์ที่ผู้ใช้เลือก (App Sandbox)
 ├── Launcher/
 │   ├── LinuxAppCatalog.swift      รายการแอพ Linux ทุกเครื่อง + Spotlight
 │   └── LaunchpadShortcuts.swift   ทางลัดใน Launchpad + เปิดแอพจาก linmo://launch
 ├── VM/
 │   ├── ConfigurationBuilder.swift สร้าง config ของ Virtualization.framework, Rosetta
-│   ├── MachineController.swift    เปิด/ปิดเครื่อง, ตั้งค่า, snapshot
+│   ├── MachineController.swift    เปิด/ปิด/พักเครื่อง, ตั้งค่า, snapshot
+│   ├── PortForwarder.swift        ส่งพอร์ต, SSH และ Docker ของ Linux มาที่ Mac
+│   ├── SharedFolderWatcher.swift  แจ้ง Linux เมื่อไฟล์ในโฟลเดอร์แชร์เปลี่ยน
 │   ├── SetupProgressListener.swift รับความคืบหน้าจาก Linux ผ่าน vsock
 │   └── MachineLibrary.swift       รายการเครื่อง, ย้ายข้อมูลจาก v0.1
 ├── Seamless/                      โหมดหน้าต่างแยก: การเชื่อมต่อ, หน้าต่าง Mac, แปลงปุ่มคีย์บอร์ด
@@ -186,16 +253,15 @@ Sources/LinMO/
 ├── Provisioning/
 │   ├── DistroCatalog.swift        รายการ distro และหน้าจอ desktop ที่ติดตั้งคลิกเดียวได้
 │   ├── ImageStore.swift           หา URL, ดาวน์โหลด, ตรวจ checksum, แคช
-│   ├── DiskConverters.swift       แปลง qcow2 / xz เป็นดิสก์ raw แบบ sparse
+│   ├── DiskConverters.swift       แปลง qcow2 / xz / img เป็นดิสก์ raw แบบ sparse
 │   ├── CloudInit.swift            สูตรตั้งค่าแต่ละ distro + สคริปต์รายงานความคืบหน้า
 │   ├── Presets.swift              ชุดสำเร็จรูป: สายเรียน Linux / dev / security lab / data science / ออกแบบ
 │   └── Provisioner.swift          ลำดับขั้นการสร้างเครื่องแบบคลิกเดียว
 └── UI/                            หน้าจอทั้งหมด (SwiftUI)
-guest/                             LinMO Agent (Python) และสคริปต์ติดตั้งใน Linux
+guest/                             LinMO Agent (Python), linmo-ports.py และสคริปต์ติดตั้งใน Linux
 guest/linmo-wayland/               compositor Wayland ของ LinMO (Rust + Smithay)
-guest/tests/                       ทดสอบ linmo-wayland กับแอพจริง
-docs/PROTOCOL.md                   โปรโตคอลระหว่างแอพกับ agent
-docs/APP_STORE.md                  ขั้นตอนส่งขึ้น Mac App Store
+guest/tests/                       ทดสอบ agent และ linmo-wayland กับแอพจริง
+scripts/                           build แอพ และฝังไฟล์ของ guest เข้าแอพ
 ```
 
 ## ปัญหาที่พบบ่อย
@@ -208,6 +274,13 @@ docs/APP_STORE.md                  ขั้นตอนส่งขึ้น Ma
 - **บูตจาก ISO ไม่ขึ้น / จอดำ** → ตรวจว่า ISO เป็นรุ่น ARM64 ไม่ใช่ x86_64 (amd64)
 - **บูตเข้าตัวติดตั้งซ้ำทุกครั้ง** → ปิดเครื่อง แล้วกด "ถอดแผ่นติดตั้ง"
 - **เขียนไฟล์ใน ~/Mac ไม่ได้** → เครื่องที่ติดตั้งจาก ISO อาจมี uid ไม่ตรงกับ Mac ใช้ `sudo` หรือตั้ง uid ให้ตรงกับ `id -u` บน Mac
+- **ค้างที่หน้าจอข้อความหลังตั้งค่าครั้งแรกเสร็จ** → กด **ปิดเครื่อง** แอพจะเปิดเครื่องใหม่เข้าหน้าจอ desktop ให้เอง
+- **Linux ต่ออินเทอร์เน็ตไม่ได้** → เครื่องที่สร้างก่อน v0.10 อาจต้องแก้ไฟล์ netplan ครั้งเดียว ให้จับการ์ดแลนด้วย driver `virtio_net` แทน MAC address
+- **"เครื่องนี้กำลังถูกใช้อยู่ในแอพ LinMO อีกตัวหนึ่ง"** → มีแอพ LinMO สองตัว (เช่นตัวใน `build/` กับตัวใน Applications) เปิดเครื่องเดียวกันอยู่
+  ปิดเครื่องหรือปิดแอพตัวนั้นก่อน LinMO ล็อกไว้เพราะถ้าเปิดดิสก์เดียวกันซ้อนกัน ดิสก์ Linux จะเสีย
+- **"เป็นต้นฉบับหรือสำเนาของเครื่องนี้และเปิดอยู่"** → ปิดเครื่องต้นฉบับหรือสำเนาก่อน เพราะใช้การ์ดเครือข่ายเดียวกัน
+- **ไม่มีปุ่ม พอร์ต / SSH ใช้ไม่ได้** → อัปเดต LinMO Tools (ดูหัวข้อ LinMO Agent) แล้วรีสตาร์ตเครื่อง
+- **ปุ่ม Snapshot กดไม่ได้** → เครื่องพักอยู่ กด **เปิดต่อ** แล้วปิดเครื่องก่อน
 
 ## License
 

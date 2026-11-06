@@ -18,7 +18,7 @@ esac
 if [[ "$MODE" == "appstore" ]]; then
   for var in SIGN_IDENTITY INSTALLER_IDENTITY TEAM_ID PROVISIONING_PROFILE; do
     if [[ -z "${!var:-}" ]]; then
-      echo "❌ รุ่น appstore ต้องตั้งตัวแปร $var (ดู docs/APP_STORE.md)" >&2
+      echo "❌ รุ่น appstore ต้องตั้งตัวแปร $var (ดู README.md)" >&2
       exit 1
     fi
   done
