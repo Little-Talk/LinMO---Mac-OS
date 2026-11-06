@@ -6,6 +6,8 @@ enum SharedTags {
     static let folder = "linmo"
     static let rosetta = "rosetta"
     static let extraFolders = "linmo-extra"
+    static let macDrives = "linmo-drives"
+    static let volumesPath = "/Volumes"
 }
 
 enum ConfigurationBuilder {
@@ -125,6 +127,13 @@ enum ConfigurationBuilder {
                 share.share = VZMultipleDirectoryShare(directories: directories)
                 directoryShares.append(share)
             }
+        }
+        if config.macDrivesShared, !AppEnvironment.isSandboxed, FileManager.default.fileExists(atPath: SharedTags.volumesPath) {
+            let share = VZVirtioFileSystemDeviceConfiguration(tag: SharedTags.macDrives)
+            share.share = VZSingleDirectoryShare(
+                directory: VZSharedDirectory(url: URL(fileURLWithPath: SharedTags.volumesPath, isDirectory: true), readOnly: false)
+            )
+            directoryShares.append(share)
         }
         if config.rosettaEnabled, RosettaSupport.availability == .installed {
             let share = VZVirtioFileSystemDeviceConfiguration(tag: SharedTags.rosetta)

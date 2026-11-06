@@ -213,6 +213,7 @@ struct MachineSettingsSheet: View {
     @State private var macTextInput = true
     @State private var preferWayland = false
     @State private var microphone = false
+    @State private var macDrives = true
     @State private var installingRosetta = false
 
     private let maxCPU = ProcessInfo.processInfo.processorCount
@@ -252,6 +253,12 @@ struct MachineSettingsSheet: View {
                 Text(tr("มีผลเมื่อเปิดเครื่องครั้งถัดไป", "Takes effect the next time the machine starts"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if !AppEnvironment.isSandboxed {
+                    Toggle(tr("ให้ Linux เห็นฮาร์ดดิสก์ภายนอกของ Mac", "Show the Mac's external drives in Linux"), isOn: $macDrives)
+                    Text(tr("ดิสก์ USB, SSD และแฟลชไดรฟ์ที่เสียบกับ Mac จะอยู่ในโฟลเดอร์ MacDrives ของ Linux มีผลเมื่อเปิดเครื่องครั้งถัดไป", "USB disks, SSDs and flash drives plugged into the Mac show up in the MacDrives folder in Linux. Takes effect the next time the machine starts"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Toggle(tr("คมชัดสูงบนจอ Retina", "High resolution on Retina displays"), isOn: $hiDPI)
                 Text(tr("Linux ใช้ความละเอียดเท่าจอ Mac และขยายตัวหนังสือ 2 เท่า มีผลเมื่อเปิดเครื่องครั้งถัดไป", "Linux uses the full Mac display resolution with 2x text. Takes effect the next time the machine starts"))
                     .font(.caption)
@@ -279,7 +286,7 @@ struct MachineSettingsSheet: View {
             }
             .padding(16)
         }
-        .frame(width: 480, height: 680)
+        .frame(width: 480, height: 720)
         .onAppear {
             name = machine.config.name
             cpuCount = machine.config.cpuCount
@@ -290,6 +297,7 @@ struct MachineSettingsSheet: View {
             macTextInput = machine.config.macTextInput
             preferWayland = machine.config.preferWayland
             microphone = machine.config.microphoneEnabled
+            macDrives = machine.config.macDrivesShared
         }
     }
 
@@ -314,6 +322,7 @@ struct MachineSettingsSheet: View {
                 $0.macTextInput = macTextInput
                 $0.preferWayland = preferWayland
                 $0.microphoneEnabled = microphone
+                $0.macDrivesShared = macDrives
             }
             machine.growDisk(toGB: diskGB)
             dismiss()
