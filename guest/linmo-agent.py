@@ -28,7 +28,7 @@ try:
 except ImportError:
     xfixes = None
 
-VERSION = 10
+VERSION = 11
 FEATURES = ["damage", "icons", "text", "drop", "scale", "shm", "dragout", "folders"]
 HOST_CID = 2
 PORT = int(os.environ.get("LINMO_AGENT_PORT", "5200"))
@@ -492,6 +492,8 @@ class Desktop:
             x, y, w, h = geo
             if w <= 2 or h <= 2 or (w >= sw and h >= sh):
                 continue
+            if x + w <= 0 or y + h <= 0 or x >= sw or y >= sh:
+                continue
             result.append((win, geo))
         return result
 
@@ -550,11 +552,56 @@ class Desktop:
     def activate(self, wid):
         win = self.window(wid)
         self.client_message(win, "_NET_ACTIVE_WINDOW", [2, X.CurrentTime, 0, 0, 0])
+        self.client_message(win, "_NET_RESTACK_WINDOW", [2, 0, X.Above, 0, 0])
         try:
             win.raise_window()
             self.d.sync()
         except error.XError:
             pass
+
+    def top_level(self, wid):
+        current = wid
+        try:
+            while True:
+                parent = self.window(current).query_tree().parent
+                if not parent or parent.id in (0, self.root.id):
+                    return current
+                current = parent.id
+        except error.XError:
+            return wid
+
+    def window_at(self, rx, ry):
+        try:
+            children = self.root.query_tree().children
+        except error.XError:
+            return 0
+        for win in reversed(children):
+            if win.id in (self.helper.id, self.catcher.id):
+                continue
+            try:
+                attrs = win.get_attributes()
+                if attrs.map_state != X.IsViewable or attrs.win_class == X.InputOnly:
+                    continue
+                geo = win.get_geometry()
+            except error.XError:
+                continue
+            border = geo.border_width
+            if geo.x <= rx < geo.x + geo.width + 2 * border and geo.y <= ry < geo.y + geo.height + 2 * border:
+                return win.id
+        return 0
+
+    def bring_under_pointer(self, wid, rx, ry, timeout=0.15):
+        target = self.top_level(wid)
+        if self.window_at(rx, ry) in (0, target):
+            return True
+        self.activate(wid)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self.window_at(rx, ry) in (0, target):
+                return True
+            time.sleep(0.01)
+        log("window", hex(wid), "is still covered at", rx, ry, "by", hex(self.window_at(rx, ry)))
+        return False
 
     def ensure_on_screen(self, wid):
         win = self.window(wid)
@@ -1745,6 +1792,9 @@ class Agent:
             pos = self.x.to_root(wid, msg.get("x", 0), msg.get("y", 0))
             if pos is None:
                 return
+            if kind == MSG_BUTTON and msg.get("pressed") and wid in self.windows:
+                if not self.x.bring_under_pointer(wid, *pos):
+                    self.activated = 0
             self.x.motion(*pos)
             if kind == MSG_BUTTON:
                 self.x.button(int(msg.get("button", 1)), bool(msg.get("pressed")))

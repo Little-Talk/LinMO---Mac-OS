@@ -51,7 +51,7 @@ final class SeamlessSession: ObservableObject {
         var isWayland: Bool { port == SeamlessPorts.wayland }
     }
 
-    static let currentAgentVersion = 10
+    static let currentAgentVersion = 11
 
     @Published private(set) var isConnected = false
     @Published private(set) var hasX11Agent = false
@@ -293,6 +293,7 @@ final class SeamlessSession: ObservableObject {
             link.connection.forgetSurface(closed.id)
             controllers.removeValue(forKey: closed.id)?.close()
             if lastFocusedNormal == closed.id { lastFocusedNormal = nil }
+            closeStrayWindows(except: Set(controllers.values.map { ObjectIdentifier($0.window) }))
             updatePopupMonitors()
         case .textInput:
             struct TextInput: Decodable { let id: UInt32; let enabled: Bool; let x, y, w, h: Int }
@@ -333,7 +334,18 @@ final class SeamlessSession: ObservableObject {
     private func closeAllWindows() {
         controllers.values.forEach { $0.close() }
         controllers.removeAll()
+        closeStrayWindows()
         updatePopupMonitors()
+    }
+
+    private func closeStrayWindows(except kept: Set<ObjectIdentifier> = []) {
+        for window in NSApp.windows where !kept.contains(ObjectIdentifier(window)) {
+            guard let view = window.contentView as? SeamlessView, view.session === self else { continue }
+            window.delegate = nil
+            view.releaseAllKeys()
+            window.orderOut(nil)
+            window.close()
+        }
     }
 
 
